@@ -32,7 +32,7 @@ export default function ApiKeyConfig({ onApiKeySet, isOpen, onClose }: ApiKeyCon
     }
 
     if (!OpenAIService.validateApiKey(apiKey)) {
-      setError("Invalid API key format. It should start with 'sk-' and be at least 20 characters long.");
+      setError("Invalid API key format. It should start with 'sk-' or 'or-' and be at least 20 characters long.");
       return;
     }
 
@@ -68,7 +68,7 @@ export default function ApiKeyConfig({ onApiKeySet, isOpen, onClose }: ApiKeyCon
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">OpenAI API Configuration</h2>
+          <h2 className="text-xl font-semibold text-gray-900">OpenRouter API Configuration</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100"
@@ -86,9 +86,9 @@ export default function ApiKeyConfig({ onApiKeySet, isOpen, onClose }: ApiKeyCon
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <h3 className="text-sm font-medium text-blue-800 mb-1">OpenAI API Key Required</h3>
+                <h3 className="text-sm font-medium text-blue-800 mb-1">OpenRouter API Key Required</h3>
                 <p className="text-sm text-blue-700">
-                  To generate implementation plans, you need an OpenAI API key. 
+                  To generate implementation plans, you need an OpenRouter API key. 
                   Your key is stored locally and never sent to our servers.
                 </p>
               </div>
@@ -99,16 +99,16 @@ export default function ApiKeyConfig({ onApiKeySet, isOpen, onClose }: ApiKeyCon
             <div>
               <h4 className="text-sm font-medium text-gray-900 mb-2">How to get your API key:</h4>
               <ol className="text-sm text-gray-600 space-y-1 ml-4">
-                <li>1. Go to <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">platform.openai.com/api-keys</a></li>
+                <li>1. Go to <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">openrouter.ai/keys</a></li>
                 <li>2. Create a new API key</li>
                 <li>3. Copy and paste it below</li>
               </ol>
             </div>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-sm text-yellow-800">
-                <strong>Note:</strong> Using the API will incur charges from OpenAI. 
-                Plan generation typically costs $0.01-0.05 per plan.
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-sm text-green-800">
+                <strong>Free tier available:</strong> OpenRouter offers free models like gpt-oss-20b. 
+                Free plan generation with no cost!
               </p>
             </div>
           </div>
@@ -117,7 +117,7 @@ export default function ApiKeyConfig({ onApiKeySet, isOpen, onClose }: ApiKeyCon
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 mb-2">
-              OpenAI API Key
+              OpenRouter API Key
             </label>
             <div className="relative">
               <input
@@ -125,7 +125,7 @@ export default function ApiKeyConfig({ onApiKeySet, isOpen, onClose }: ApiKeyCon
                 type={showKey ? "text" : "password"}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
+                placeholder="sk-or-v1-..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
               />
               <button

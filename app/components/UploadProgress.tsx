@@ -11,14 +11,23 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
   const { total, completed, currentFile, isUploading } = progress;
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
+  console.log('📊 Upload progress update:', {
+    total,
+    completed,
+    percentage,
+    currentFile,
+    isUploading
+  });
+
   if (!isUploading && completed === 0) {
+    console.log('⏭️ Upload progress hidden - not uploading and no files completed');
     return null;
   }
 
   return (
     <div className="w-full space-y-4">
       {/* Progress Bar */}
-      <div className="w-full bg-gray-200 rounded-full h-2">
+      <div className="w-full bg-gray-600 rounded-full h-2">
         <div
           className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300 ease-out"
           style={{ width: `${percentage}%` }}
@@ -28,15 +37,15 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
       {/* Progress Stats */}
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center space-x-4">
-          <span className="font-medium text-gray-700">
+          <span className="font-medium text-gray-300">
             {completed} of {total} files
           </span>
-          <span className="text-gray-500">
+          <span className="text-gray-400">
             ({percentage}%)
           </span>
         </div>
         
-        <div className="flex items-center text-gray-600">
+        <div className="flex items-center text-gray-300">
           {isUploading ? (
             <>
               <div className="animate-spin mr-2">
@@ -48,10 +57,10 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
             </>
           ) : (
             <>
-              <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span className="text-green-600">Complete</span>
+              <span className="text-green-400">Complete</span>
             </>
           )}
         </div>
@@ -59,14 +68,14 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
 
       {/* Current File */}
       {currentFile && isUploading && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <div className="bg-gray-700 border border-gray-600 rounded-lg p-3">
           <div className="flex items-center">
             <div className="flex-shrink-0 mr-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-blue-800 font-medium">Processing:</p>
-              <p className="text-sm text-blue-600 truncate" title={currentFile}>
+              <p className="text-sm text-blue-300 font-medium">Processing:</p>
+              <p className="text-sm text-gray-300 truncate" title={currentFile}>
                 {currentFile}
               </p>
             </div>
@@ -76,16 +85,16 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
 
       {/* Success State */}
       {!isUploading && completed === total && total > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+        <div className="bg-gray-700 border border-green-500 rounded-lg p-3">
           <div className="flex items-center">
-            <svg className="w-5 h-5 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-green-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
-              <p className="text-sm font-medium text-green-800">
+              <p className="text-sm font-medium text-green-300">
                 Upload Complete!
               </p>
-              <p className="text-sm text-green-600">
+              <p className="text-sm text-gray-300">
                 Successfully processed {total} files. Ready to generate your plan.
               </p>
             </div>
@@ -96,23 +105,23 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
       {/* Processing Steps Indicator */}
       {isUploading && (
         <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className={`text-center p-2 rounded ${completed > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+          <div className={`text-center p-2 rounded ${completed > 0 ? 'bg-green-800 text-green-300' : 'bg-gray-700 text-gray-400'}`}>
             <div className="font-medium mb-1">📂 Reading Files</div>
-            <div className={completed > 0 ? 'text-green-600' : 'text-gray-400'}>
+            <div className={completed > 0 ? 'text-green-400' : 'text-gray-500'}>
               {completed > 0 ? '✓' : '●'}
             </div>
           </div>
           
-          <div className={`text-center p-2 rounded ${percentage > 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+          <div className={`text-center p-2 rounded ${percentage > 50 ? 'bg-yellow-800 text-yellow-300' : 'bg-gray-700 text-gray-400'}`}>
             <div className="font-medium mb-1">🔍 Processing</div>
-            <div className={percentage > 50 ? 'text-yellow-600' : 'text-gray-400'}>
+            <div className={percentage > 50 ? 'text-yellow-400' : 'text-gray-500'}>
               {percentage > 50 ? '⚡' : '●'}
             </div>
           </div>
           
-          <div className={`text-center p-2 rounded ${percentage === 100 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+          <div className={`text-center p-2 rounded ${percentage === 100 ? 'bg-green-800 text-green-300' : 'bg-gray-700 text-gray-400'}`}>
             <div className="font-medium mb-1">✨ Indexing</div>
-            <div className={percentage === 100 ? 'text-green-600' : 'text-gray-400'}>
+            <div className={percentage === 100 ? 'text-green-400' : 'text-gray-500'}>
               {percentage === 100 ? '✓' : '●'}
             </div>
           </div>

@@ -8,19 +8,29 @@ import { StorageManager } from "../lib/storageManager";
 interface FileUploadProps {
   onFilesUploaded: (files: UploadedFile[]) => void;
   onProgressUpdate: (progress: UploadProgress) => void;
-  onCodebaseProcessed?: (codebaseId: string) => void;
 }
 
-export default function FileUpload({ onFilesUploaded, onProgressUpdate, onCodebaseProcessed }: FileUploadProps) {
+export default function FileUpload({ onFilesUploaded, onProgressUpdate }: FileUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const processFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
-    const totalFiles = files.length;
+    
+    // Filter out unwanted files
+    const filteredFiles = files.filter(file => {
+      const path = file.webkitRelativePath || file.name;
+      return !isExcludedFile(path);
+    });
+
+    const totalFiles = filteredFiles.length;
     let processedFiles = 0;
     const uploadedFiles: UploadedFile[] = [];
-    const parsedFiles: CodebaseIndex[] = [];
+
+    // Show how many files were filtered out
+    if (files.length !== filteredFiles.length) {
+      console.log(`Filtered out ${files.length - filteredFiles.length} unwanted files`);
+    }
 
     onProgressUpdate({
       total: totalFiles,
@@ -30,7 +40,7 @@ export default function FileUpload({ onFilesUploaded, onProgressUpdate, onCodeba
     });
 
     // Process files one by one
-    for (const file of files) {
+    for (const file of filteredFiles) {
       const relativePath = file.webkitRelativePath || file.name;
       onProgressUpdate({
         total: totalFiles,
@@ -45,12 +55,6 @@ export default function FileUpload({ onFilesUploaded, onProgressUpdate, onCodeba
         
         if (isTextFile && file.size < 1024 * 1024) { // Only read text files under 1MB
           content = await readFileContent(file);
-          
-          // Parse the file using the codebase parser
-          if (content.trim()) {
-            const parsedFile = CodebaseParser.parseFile(relativePath, content);
-            parsedFiles.push(parsedFile);
-          }
         }
 
         const uploadedFile: UploadedFile = {
@@ -75,17 +79,6 @@ export default function FileUpload({ onFilesUploaded, onProgressUpdate, onCodeba
     // Organize files into tree structure
     const fileTree = organizeFilesIntoTree(uploadedFiles);
 
-    // Store processed codebase
-    if (parsedFiles.length > 0) {
-      try {
-        const codebaseName = `Codebase_${Date.now()}`;
-        const codebaseId = await StorageManager.storeCodebase(codebaseName, parsedFiles, true);
-        onCodebaseProcessed?.(codebaseId);
-      } catch (error) {
-        console.error('Error storing codebase:', error);
-      }
-    }
-
     onProgressUpdate({
       total: totalFiles,
       completed: totalFiles,
@@ -94,7 +87,7 @@ export default function FileUpload({ onFilesUploaded, onProgressUpdate, onCodeba
     });
 
     onFilesUploaded(fileTree);
-  }, [onFilesUploaded, onProgressUpdate, onCodebaseProcessed]);
+  }, [onFilesUploaded, onProgressUpdate]);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -311,4 +304,71 @@ function organizeFilesIntoTree(files: UploadedFile[]): UploadedFile[] {
   }
 
   return tree;
+}
+
+function isExcludedFile(filePath: string): boolean {
+  const path = filePath.toLowerCase();
+  const fileName = path.split('/').pop() || '';
+  
+  // Excluded directories (should be anywhere in the path)
+  const excludedDirs = [
+    'node_modules',
+    'vendor',
+    'dist',
+    'build',
+    '.next',
+    '.out', 
+    'target',
+    '.cache',
+    '__pycache__',
+    '.parcel-cache',
+    '.idea',
+    '.vscode'
+  ];
+  
+  // Check if path contains any excluded directory
+  for (const dir of excludedDirs) {
+    if (path.includes(`/${dir}/`) || path.startsWith(`${dir}/`) || path === dir) {
+      return true;
+    }
+  }
+  
+  // Excluded file extensions
+  const excludedExtensions = [
+    '.exe', '.dll', '.so', '.zip', '.tar.gz', '.rar',
+    '.png', '.jpg', '.jpeg', '.gif', '.svg',
+    '.mp3', '.mp4', '.pdf', '.log'
+  ];
+  
+  for (const ext of excludedExtensions) {
+    if (fileName.endsWith(ext)) {
+      return true;
+    }
+  }
+  
+  // Excluded specific files
+  const excludedFiles = [
+    '.ds_store',
+    'thumbs.db',
+    '.env',
+    '.env.local',
+    'npm-debug.log',
+    'yarn-error.log',
+    'package-lock.json',
+    'yarn.lock',
+    'pnpm-lock.yaml',
+    'poetry.lock',
+    'pipfile.lock'
+  ];
+  
+  if (excludedFiles.includes(fileName)) {
+    return true;
+  }
+  
+  // Excluded patterns
+  if (fileName.startsWith('.env.')) {
+    return true;
+  }
+  
+  return false;
 }

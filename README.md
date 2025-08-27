@@ -1,36 +1,136 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Traycer AI - Codebase Implementation Planner
 
-## Getting Started
+🚀 **Dark-themed AI-powered tool for generating detailed implementation plans from your codebase.**
 
-First, run the development server:
+Upload your project folder and get comprehensive, actionable plans for implementing new features or fixing issues using AI.
 
+## ✨ Features
+
+- **🌙 Dark Theme Interface** - Beautiful dark UI optimized for developers
+- **📁 Direct Folder Upload** - One-click folder selection, no drag-and-drop needed
+- **🤖 AI-Powered Planning** - Uses OpenRouter's free gpt-oss-20b:free model
+- **🔍 Smart File Filtering** - Automatically excludes node_modules, build files, etc.
+- **📊 Real-time Progress** - Live upload progress with detailed logging
+- **🎯 Toast Notifications** - Instant feedback for all operations
+- **🔧 Comprehensive Logging** - Detailed console logs for debugging
+
+## 🛠️ Setup
+
+### 1. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure Environment Variables
+Create a `.env.local` file in the project root:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Get your API key from https://openrouter.ai/keys
+NEXT_PUBLIC_OPEN_AI_API=sk-or-v1-your-openrouter-api-key-here
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Get Your OpenRouter API Key
+1. Visit [OpenRouter Keys](https://openrouter.ai/keys)
+2. Create a new API key (free tier available!)
+3. Copy the key to your `.env.local` file
 
-## Learn More
+### 4. Run the Development Server
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://localhost:3000](http://localhost:3000) to start using Traycer AI!
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🚀 How to Use
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Enter Your Prompt** - Describe what you want to implement in the central text area
+2. **Upload Codebase** - Click "Upload Codebase" to select your project folder
+3. **Generate Plan** - Click "Send" to index your codebase and generate an AI implementation plan
+4. **Follow the Plan** - Get detailed, step-by-step instructions for your implementation
 
-## Deploy on Vercel
+## 📋 Supported File Types
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Automatically processes:**
+- JavaScript/TypeScript (`.js`, `.jsx`, `.ts`, `.tsx`)
+- Python (`.py`)
+- Java (`.java`)
+- C/C++ (`.c`, `.cpp`, `.h`, `.hpp`)
+- C# (`.cs`)
+- PHP (`.php`)
+- Ruby (`.rb`)
+- Go (`.go`)
+- Rust (`.rs`)
+- HTML/CSS (`.html`, `.css`, `.scss`)
+- Configuration files (`.json`, `.yaml`, `.toml`)
+- Documentation (`.md`, `.txt`)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Automatically excludes:**
+- Dependencies (`node_modules/`, `vendor/`)
+- Build artifacts (`dist/`, `build/`, `.next/`)
+- IDE files (`.vscode/`, `.idea/`)
+- Binary files (`.exe`, `.dll`, images, videos)
+- Lock files (`package-lock.json`, `yarn.lock`)
+
+## 🔍 Development Features
+
+### Console Logging
+Every operation is logged with emojis for easy debugging:
+- 🔄 Process start/progress
+- ✅ Success operations  
+- ❌ Error conditions
+- 📁 File operations
+- 🤖 AI API calls
+- 📊 Statistics and metrics
+
+### Toast Notifications
+Real-time feedback for:
+- ✅ Successful uploads
+- ❌ Error messages
+- 📊 Progress updates
+- 🎉 Plan generation complete
+
+## 📁 Project Structure
+
+```
+app/
+├── components/
+│   ├── PromptArea.tsx      # Dark-themed prompt input
+│   ├── UploadProgress.tsx  # Progress tracking with logging
+│   └── PlanDisplay.tsx     # AI-generated plan viewer
+├── lib/
+│   ├── openAIService.ts    # OpenRouter API integration
+│   ├── codebaseParser.ts   # File parsing and indexing
+│   └── storageManager.ts   # Local storage management
+└── page.tsx                # Main application with upload logic
+```
+
+## 🌟 Key Improvements
+
+- **One-Click Upload**: Direct folder selection without drag-and-drop
+- **Smart Filtering**: Automatic exclusion of unwanted files
+- **Environment-Based Auth**: API key from environment variables
+- **Comprehensive Logging**: Full operation visibility in console
+- **Toast Feedback**: Instant user notifications
+- **Dark Theme**: Professional dark interface
+- **Error Handling**: Robust error handling with user feedback
+
+## 🚨 Troubleshooting
+
+**Upload Issues:**
+- Check console logs for detailed error information
+- Ensure you're selecting a folder (not individual files)
+- Verify the folder contains supported file types
+
+**API Errors:**
+- Verify your OpenRouter API key in `.env.local`
+- Check console for API-specific error messages
+- Ensure you have credits/quota remaining
+
+**Performance:**
+- Large codebases (>1000 files) may take longer to process
+- Files over 1MB are automatically skipped for content reading
+- All operations are logged for performance monitoring
+
+## 📄 License
+
+This project is built with [Next.js](https://nextjs.org) and uses [OpenRouter](https://openrouter.ai) for AI functionality.
