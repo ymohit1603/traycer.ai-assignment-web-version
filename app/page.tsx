@@ -187,6 +187,9 @@ export default function Home() {
   
   // Plan Generation Progress
   const [planProgress, setPlanProgress] = useState<PlanGenerationProgress | null>(null);
+  
+  // Analysis Mode
+  const [useDeepAnalysis, setUseDeepAnalysis] = useState(true); // Cursor AI-like reading
 
 
 
@@ -433,7 +436,8 @@ export default function Home() {
         codebase!,
         promptText,
         4000, // max tokens
-        (progress) => setPlanProgress(progress) // progress callback
+        (progress) => setPlanProgress(progress), // progress callback
+        useDeepAnalysis // analysis mode
       );
       
       console.log('✅ Plan generated successfully:', {
@@ -627,7 +631,8 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
           storedCodebase,
           contextualPrompt,
           4000,
-          (progress) => setPlanProgress(progress) // progress callback
+          (progress) => setPlanProgress(progress), // progress callback
+          useDeepAnalysis // analysis mode
         );
       } else {
         // This shouldn't happen, but handle gracefully
@@ -686,6 +691,43 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                     onChange={setPrompt}
               placeholder="Describe what you want to implement in your codebase..."
             />
+            
+            {/* Analysis Mode Toggle */}
+            <div className="mt-6 flex justify-center">
+              <div className="bg-gray-700 rounded-lg p-1 flex">
+                <button
+                  onClick={() => setUseDeepAnalysis(false)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    !useDeepAnalysis
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-gray-300 hover:text-white hover:bg-gray-600'
+                  }`}
+                >
+                  ⚡ Quick Analysis
+                </button>
+                <button
+                  onClick={() => setUseDeepAnalysis(true)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    useDeepAnalysis
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-gray-300 hover:text-white hover:bg-gray-600'
+                  }`}
+                >
+                  🧠 Deep Analysis
+                </button>
+              </div>
+            </div>
+            
+            {/* Mode Description */}
+            <div className="mt-3 text-center">
+              <p className="text-sm text-gray-400">
+                {useDeepAnalysis ? (
+                  <>🔍 Cursor AI-like: Reads actual file contents for context-aware plans</>
+                ) : (
+                  <>⚡ Fast mode: Uses file metadata only for quick results</>
+                )}
+              </p>
+            </div>
             
             {/* Buttons */}
             <div className="flex justify-center items-center space-x-4 mt-6">

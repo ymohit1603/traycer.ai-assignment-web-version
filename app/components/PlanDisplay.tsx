@@ -313,79 +313,56 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
         </div>
       </div>
 
-      {/* Sections */}
-      <div className="p-6 space-y-6">
-        {plan.sections.map((section, index) => (
-          <div key={section.id} className="border border-gray-200 rounded-lg">
-            {/* Section Header */}
-            <div
-              className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-              onClick={() => toggleSection(section.id)}
-            >
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl">{getSectionIcon(section.type)}</span>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{getSectionTitle(section)}</h3>
-                  <p className="text-sm text-gray-600">
-                    {section.id === 'observations' || section.id === 'approach' 
-                      ? 'Analysis section' 
-                      : `${section.items.length} items`
-                    }
-                  </p>
+      {/* Clean Plan Display */}
+      <div className="p-6 space-y-8">
+        {/* Observations Section */}
+        {plan.sections.find(s => s.id === 'observations') && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Observations</h2>
+            <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+              {plan.sections.find(s => s.id === 'observations')?.content}
+            </div>
+          </div>
+        )}
+
+        {/* Approach Section */}
+        {plan.sections.find(s => s.id === 'approach') && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Approach</h2>
+            <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+              {plan.sections.find(s => s.id === 'approach')?.content}
+            </div>
+          </div>
+        )}
+
+        {/* Implementation Files Section */}
+        {plan.sections.find(s => s.id === 'files') && (
+          <div>
+            {plan.sections.find(s => s.id === 'files')?.items.map((item) => (
+              <div key={item.id} className="mb-6">
+                {/* File Path */}
+                <div className="font-mono text-blue-600 font-semibold mb-1">
+                  {item.filePath || 'File'}
+                </div>
+                
+                {/* Status */}
+                <div className="text-sm text-gray-600 mb-1 uppercase font-medium">
+                  {item.type === 'create' ? 'NEW' : 'MODIFY'}
+                </div>
+                
+                {/* Reference Line */}
+                <div className="text-sm text-gray-500 mb-2">
+                  Add file or resource
+                </div>
+                
+                {/* Description */}
+                <div className="text-gray-700 leading-relaxed mb-4">
+                  {item.details}
                 </div>
               </div>
-              
-              <div className="flex items-center space-x-2">
-                <span className={`px-2 py-1 rounded-full text-xs ${getPriorityColor(section.priority)}`}>
-                  {section.priority.toUpperCase()}
-                </span>
-                <svg
-                  className={`w-5 h-5 text-gray-400 transition-transform ${
-                    expandedSections[section.id] ? 'rotate-180' : ''
-                  }`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Section Content */}
-            {(expandedSections[section.id] || index === 0) && (
-              <div className="border-t border-gray-200">
-                {/* For Observations and Approach sections, show content prominently */}
-                {(section.id === 'observations' || section.id === 'approach') ? (
-                  <div className="p-6">
-                    <div className="prose max-w-none">
-                      <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                        {section.content}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="p-4 bg-gray-50">
-                      <p className="text-gray-700">{section.content}</p>
-                    </div>
-                    
-                    <div className="divide-y divide-gray-200">
-                      {section.items.map((item) => (
-                        <PlanItemComponent
-                          key={item.id}
-                          item={item}
-                          onCopy={(text) => copyToClipboard(text, item.id)}
-                          isCopied={copiedItems[item.id] || false}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+            ))}
           </div>
-        ))}
+        )}
       </div>
       
       {/* Follow-up conversation area */}

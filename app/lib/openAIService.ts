@@ -94,7 +94,8 @@ export class OpenAIService {
     storedCodebase: StoredCodebase,
     userPrompt: string,
     maxTokens: number = 4000,
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    useDeepAnalysis: boolean = true
   ): Promise<GeneratedPlan> {
     console.log('🚀 Starting implementation plan generation...', {
       codebaseFiles: storedCodebase.metadata.totalFiles,
@@ -112,7 +113,7 @@ export class OpenAIService {
         message: 'Analyzing codebase structure...',
       });
       
-      const context = await this.prepareContext(storedCodebase, userPrompt, onProgress);
+      const context = await this.prepareContext(storedCodebase, userPrompt, onProgress, useDeepAnalysis);
       console.log('✅ Context prepared:', {
         relevantFiles: context.relevantFiles.length,
         dependencies: context.dependencies.length,
@@ -124,10 +125,24 @@ export class OpenAIService {
       onProgress?.({
         step: 'generating',
         progress: 60,
-        message: 'Generating implementation plan...',
+        message: '🤖 Connecting to AI model...',
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      onProgress?.({
+        step: 'generating',
+        progress: 65,
+        message: '💭 AI is analyzing your requirements...',
       });
       
       const planContent = await this.callOpenAI(context, maxTokens);
+      
+      onProgress?.({
+        step: 'generating',
+        progress: 80,
+        message: '🧠 AI is formulating implementation strategy...',
+      });
       console.log('✅ OpenAI API response received:', {
         responseLength: planContent.length
       });
@@ -160,7 +175,7 @@ export class OpenAIService {
     }
   }
 
-  private async prepareContext(storedCodebase: StoredCodebase, userPrompt: string, onProgress?: ProgressCallback): Promise<ContextData> {
+  private async prepareContext(storedCodebase: StoredCodebase, userPrompt: string, onProgress?: ProgressCallback, useDeepAnalysis: boolean = true): Promise<ContextData> {
     const searchEngine = new SearchEngine(storedCodebase);
     
     // Extract key information from the codebase
@@ -184,50 +199,86 @@ export class OpenAIService {
     });
     
     const searchResults = searchEngine.search(userPrompt, {
-      maxResults: 10, // Reduced since we'll include content
-      includeContent: true, // Now actually include content
+      maxResults: useDeepAnalysis ? 10 : 20, // More results for lightweight mode
+      includeContent: useDeepAnalysis, // Only include content in deep analysis
     });
     
     const relevantFiles = searchResults.map(result => result.filePath);
     const relevantFilesWithContent: Array<{path: string, content: string, relevance: number}> = [];
     
-    // Actually read relevant files (not just simulate)
-    for (let i = 0; i < Math.min(searchResults.length, 5); i++) {
-      const result = searchResults[i];
-      const file = searchEngine.getFileById(result.fileId);
+    if (useDeepAnalysis) {
+      // DEEP ANALYSIS: Actually read file contents (Cursor AI-like)
+      onProgress?.({
+        step: 'analyzing',
+        progress: 30,
+        message: '🧠 Entering deep analysis mode...',
+      });
       
-      if (file && file.content) {
-        onProgress?.({
-          step: 'analyzing',
-          currentFile: file.filePath,
-          progress: 35 + (i * 5),
-          message: `Reading ${file.filePath}...`,
-        });
+      for (let i = 0; i < Math.min(searchResults.length, 5); i++) {
+        const result = searchResults[i];
+        const file = searchEngine.getFileById(result.fileId);
         
-        // Include file content (truncated if too long)
-        const truncatedContent = file.content.length > 2000 
-          ? file.content.substring(0, 2000) + '\n... (truncated)'
-          : file.content;
+        if (file && file.content) {
+          onProgress?.({
+            step: 'analyzing',
+            currentFile: file.filePath,
+            progress: 35 + (i * 5),
+            message: `📄 Reading ${file.filePath}...`,
+          });
           
-        relevantFilesWithContent.push({
-          path: file.filePath,
-          content: truncatedContent,
-          relevance: result.relevanceScore
-        });
-        
-        // Small delay to make the reading indicator visible
-        await new Promise(resolve => setTimeout(resolve, 300));
+          // Show reasoning steps
+          await new Promise(resolve => setTimeout(resolve, 200));
+          onProgress?.({
+            step: 'analyzing',
+            currentFile: file.filePath,
+            progress: 35 + (i * 5),
+            message: `💭 Analyzing patterns in ${file.filePath}...`,
+          });
+          
+          // Include file content (truncated if too long)
+          const truncatedContent = file.content.length > 2000 
+            ? file.content.substring(0, 2000) + '\n... (truncated)'
+            : file.content;
+            
+          relevantFilesWithContent.push({
+            path: file.filePath,
+            content: truncatedContent,
+            relevance: result.relevanceScore
+          });
+          
+          // Small delay to make the reading indicator visible
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
       }
+    } else {
+      // LIGHTWEIGHT ANALYSIS: Metadata only (fast mode)
+      onProgress?.({
+        step: 'analyzing',
+        progress: 40,
+        message: '⚡ Quick analysis mode - using file metadata...',
+      });
+      
+      // Small delay for UX
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     // Create project structure overview
     onProgress?.({
       step: 'analyzing',
       progress: 50,
-      message: 'Building project structure overview...',
+      message: '🏗️ Building project structure overview...',
     });
     
     const projectStructure = this.generateProjectStructure(storedCodebase);
+    
+    // Show reasoning for component identification
+    onProgress?.({
+      step: 'analyzing',
+      progress: 52,
+      message: '🔍 Identifying key components and patterns...',
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 300));
     
     // Identify key components
     const keyComponents = [
@@ -240,7 +291,7 @@ export class OpenAIService {
     onProgress?.({
       step: 'analyzing',
       progress: 55,
-      message: 'Generating codebase summary...',
+      message: '📝 Generating codebase summary...',
     });
     
     const codebaseOverview = this.generateCodebaseOverview(
