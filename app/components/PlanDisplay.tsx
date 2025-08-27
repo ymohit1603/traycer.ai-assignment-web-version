@@ -3,6 +3,42 @@
 import React, { useState } from "react";
 import { GeneratedPlan, PlanSection, PlanItem, PlanGenerationProgress } from "../lib/openAIService";
 
+// Helper function to get action type for display
+const getActionType = (item: PlanItem): string => {
+  return item.type === 'create' ? 'NEW' : 'MODIFY';
+};
+
+// Helper function to process text and make file paths blue
+const processFilePathsInText = (text: string): React.ReactElement => {
+  // Enhanced pattern to match various file path formats
+  const filePathPattern = /(\*\*`[^`]+\.[a-zA-Z0-9]+`\*\*|`[^`]+\.[a-zA-Z0-9]+`|\*\*[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.\/-]*\.[a-zA-Z0-9]+\*\*|[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.\/-]*\.[a-zA-Z0-9]+|\b[a-zA-Z0-9_.-]+\.[a-zA-Z0-9]+\b)/g;
+  
+  const parts = text.split(filePathPattern);
+  
+  return (
+    <>
+      {parts.map((part, index) => {
+        // Create a new regex for testing since we need a fresh instance
+        const testPattern = /(\*\*`[^`]+\.[a-zA-Z0-9]+`\*\*|`[^`]+\.[a-zA-Z0-9]+`|\*\*[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.\/-]*\.[a-zA-Z0-9]+\*\*|[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.\/-]*\.[a-zA-Z0-9]+|\b[a-zA-Z0-9_.-]+\.[a-zA-Z0-9]+\b)/;
+        
+        if (testPattern.test(part)) {
+          // This is a file path - clean up the markdown and style it
+          const cleanPath = part.replace(/\*\*`|`\*\*|`|\*\*/g, '');
+          return (
+            <span 
+              key={index} 
+              className="text-blue-400 bg-blue-900/20 px-1.5 py-0.5 rounded font-mono font-semibold"
+            >
+              {cleanPath}
+            </span>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
+};
+
 interface PlanDisplayProps {
   plan: GeneratedPlan | null;
   isLoading: boolean;
@@ -42,27 +78,41 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
   const copyFullPlan = async () => {
     if (!plan) return;
     
-    let fullPlanText = `# ${plan.title}\n\n${plan.overview}\n\n`;
+    let fullPlanText = `# ${plan.title}\n\n`;
     
-    plan.sections.forEach(section => {
-      fullPlanText += `## ${section.title}\n\n${section.content}\n\n`;
-      
-      section.items.forEach(item => {
-        fullPlanText += `### ${item.title}\n`;
-        fullPlanText += `${item.description}\n\n`;
-        if (item.filePath) {
-          fullPlanText += `**File:** ${item.filePath}\n\n`;
-        }
-        fullPlanText += `${item.details}\n\n`;
-        if (item.dependencies.length > 0) {
-          fullPlanText += `**Dependencies:** ${item.dependencies.join(', ')}\n\n`;
-        }
-        if (item.estimatedTime) {
-          fullPlanText += `**Estimated Time:** ${item.estimatedTime}\n\n`;
-        }
-        fullPlanText += '---\n\n';
-      });
-    });
+    // Observations section
+    const observationsSection = plan.sections.find(s => s.id === 'observations');
+    if (observationsSection) {
+      fullPlanText += `**Observations**\n${observationsSection.content}\n\n`;
+    }
+    
+    // Approach section
+    const approachSection = plan.sections.find(s => s.id === 'approach');
+    if (approachSection) {
+      fullPlanText += `**Approach**\n${approachSection.content}\n\n`;
+    }
+    
+    // Implementation Files section
+    const filesSection = plan.sections.find(s => s.id === 'files');
+    if (filesSection) {
+      filesSection.items
+        .filter(item => {
+          // Filter out optional entries
+          const fileName = item.filePath?.split('/').pop() || item.filePath || '';
+          const actionType = getActionType(item);
+          const description = item.details || '';
+          
+          return !(fileName.toLowerCase().includes('(optional)') || 
+                  actionType.toLowerCase().includes('(optional)') || 
+                  description.toLowerCase().includes('(optional)'));
+        })
+        .forEach(item => {
+          const fileName = item.filePath?.split('/').pop() || item.filePath || 'Unknown file';
+          fullPlanText += `${fileName}\n`;
+          fullPlanText += `${getActionType(item)}\n`;
+          fullPlanText += `${item.details}\n\n`;
+        });
+    }
     
     await copyToClipboard(fullPlanText, 'full-plan');
   };
@@ -116,25 +166,25 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
+      <div className="bg-gray-900 rounded-xl shadow-2xl border border-gray-800 p-8">
         <div className="text-center">
           {isRefining && (
-            <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-              <div className="flex items-center justify-center space-x-2 text-purple-700">
+            <div className="mb-6 p-4 bg-purple-900/30 border border-purple-800 rounded-lg">
+              <div className="flex items-center justify-center space-x-2 text-purple-300">
                 <svg className="animate-spin w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 <span className="font-semibold">🔄 Refining Your Plan</span>
               </div>
-              <p className="text-sm text-purple-600 mt-2">
+              <p className="text-sm text-purple-300 mt-2">
                 Taking your feedback into account and updating the implementation plan...
               </p>
             </div>
           )}
           
           <div className={`inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white ${
-            isRefining ? 'bg-purple-500' : 'bg-blue-500'
+            isRefining ? 'bg-purple-600' : 'bg-blue-600'
           }`}>
             <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -142,52 +192,88 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
             </svg>
             {isRefining ? 'Refining Plan...' : 'Generating Implementation Plan...'}
           </div>
-          <p className="text-gray-600 mt-4">{isRefining ? 'Incorporating your suggestions and improving the plan...' : 'Analyzing your codebase and creating a detailed plan...'}</p>
+          <p className="text-gray-300 mt-4">{isRefining ? 'Incorporating your suggestions and improving the plan...' : 'Analyzing your codebase and creating a detailed plan...'}</p>
           
-          {/* Progress Information */}
+          {/* Cursor AI-like Progress Display */}
           {progress && (
-            <div className="mt-6 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{progress.message}</span>
-                <span className="text-blue-500 font-medium">{progress.progress}%</span>
+            <div className="mt-6 bg-gray-800 rounded-lg p-4 border border-gray-700">
+              {/* Current Action - Large and Prominent */}
+              <div className="mb-4">
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                  <span className="text-lg font-medium text-gray-100">{progress.message}</span>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-700 rounded-full h-1.5">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 h-1.5 rounded-full transition-all duration-500 ease-out" 
+                    style={{ width: `${progress.progress}%` }}
+                  ></div>
+                </div>
+                <div className="text-right text-xs text-gray-400 mt-1">{progress.progress}%</div>
               </div>
               
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300" 
-                  style={{ width: `${progress.progress}%` }}
-                ></div>
-              </div>
-              
-              {/* Current File Being Read */}
+              {/* Current File Being Read - Prominent Display */}
               {progress.currentFile && (
-                <div className="flex items-center space-x-2 text-sm text-blue-600">
-                  <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>Reading {progress.currentFile}</span>
+                <div className="bg-gray-900 rounded-lg p-3 border border-blue-900/40 shadow-sm">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-1 h-1 bg-green-400 rounded-full animate-ping"></div>
+                    <svg className="w-4 h-4 text-blue-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span className="text-sm font-mono text-blue-300 font-medium">{progress.currentFile}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-400 ml-6">Reading and analyzing file contents...</div>
                 </div>
               )}
+              
+              {/* Step Information */}
+              <div className="mt-3 text-xs text-gray-400 uppercase tracking-wide">
+                {progress.step === 'analyzing' && 'ANALYZING CODEBASE'}
+                {progress.step === 'generating' && 'GENERATING PLAN'}
+                {progress.step === 'finalizing' && 'FINALIZING PLAN'}
+                {progress.step === 'complete' && 'COMPLETE'}
+              </div>
             </div>
           )}
           
           {/* Fallback progress display when no specific progress */}
           {!progress && (
-            <div className="mt-6 space-y-2">
-              {isRefining ? (
-                <>
-                  <div className="text-sm text-purple-600">🔄 Reviewing your feedback...</div>
-                  <div className="text-sm text-purple-600">🧠 Updating plan sections...</div>
-                  <div className="text-sm text-purple-600">✨ Improving recommendations...</div>
-                </>
-              ) : (
-                <>
-                  <div className="text-sm text-gray-500">🔍 Analyzing codebase structure...</div>
-                  <div className="text-sm text-gray-500">🧠 Processing with AI...</div>
-                  <div className="text-sm text-gray-500">📋 Generating detailed plan...</div>
-                </>
-              )}
+            <div className="mt-6 bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="space-y-3">
+                {isRefining ? (
+                  <>
+                    <div className="flex items-center space-x-3 text-purple-300">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                      <span className="text-sm font-medium">🔄 Reviewing your feedback...</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-purple-300">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                      <span className="text-sm font-medium">🧠 Updating plan sections...</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-purple-300">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                      <span className="text-sm font-medium">✨ Improving recommendations...</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center space-x-3 text-blue-300">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                      <span className="text-sm font-medium">🔍 Analyzing codebase structure...</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-blue-300">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                      <span className="text-sm font-medium">🧠 Processing with AI...</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-blue-300">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                      <span className="text-sm font-medium">📋 Generating detailed plan...</span>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -197,15 +283,15 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
 
   if (error) {
     return (
-      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
+      <div className="bg-gray-900 rounded-xl shadow-2xl border border-gray-800 p-8">
         <div className="text-center">
-          <div className="text-red-600 mb-4">
+          <div className="text-red-400 mb-4">
             <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5C3.312 16.333 4.274 18 5.814 18z" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Plan Generation Failed</h3>
-          <p className="text-gray-600 mb-6">{error}</p>
+          <h3 className="text-lg font-semibold text-gray-100 mb-2">Plan Generation Failed</h3>
+          <p className="text-gray-300 mb-6">{error}</p>
           
           <div className="flex justify-center space-x-4">
             {onRegeneratePlan && (
@@ -218,7 +304,7 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
             )}
             <button
               onClick={onClose}
-              className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-6 py-2 rounded-lg transition-colors"
+              className="bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 px-6 py-2 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -233,38 +319,13 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+    <div className="bg-gray-900 rounded-xl shadow-2xl border border-gray-800">
       {/* Header */}
-      <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+      <div className="p-6 border-b border-gray-800 bg-gradient-to-r from-gray-900 via-gray-900 to-gray-900">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{plan.title}</h2>
-            <p className="text-gray-600 mb-4">{plan.overview}</p>
-            
-            {/* Metadata */}
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <div className="flex items-center space-x-2">
-                <span className="font-medium text-gray-700">Complexity:</span>
-                <span className={`px-2 py-1 rounded-full text-xs ${getPriorityColor(plan.metadata.complexity)}`}>
-                  {plan.metadata.complexity.toUpperCase()}
-                </span>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <span className="font-medium text-gray-700">Estimated Time:</span>
-                <span className="text-blue-600">{plan.metadata.estimatedTimeHours}h</span>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <span className="font-medium text-gray-700">Languages:</span>
-                <span className="text-purple-600">{plan.metadata.affectedLanguages.join(', ')}</span>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <span className="font-medium text-gray-700">Generated:</span>
-                <span className="text-gray-500">{formatTime(plan.timestamp)}</span>
-              </div>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-100 mb-2">{plan.title}</h2>
+            <p className="text-gray-300 mb-4">{plan.overview}</p>
           </div>
           
           <div className="flex items-center space-x-2 ml-4">
@@ -303,7 +364,7 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
             
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-2 rounded-md hover:bg-gray-100"
+              className="text-gray-400 hover:text-gray-200 p-2 rounded-md hover:bg-gray-800"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -318,9 +379,9 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
         {/* Observations Section */}
         {plan.sections.find(s => s.id === 'observations') && (
           <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Observations</h2>
-            <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-              {plan.sections.find(s => s.id === 'observations')?.content}
+            <h2 className="text-xl font-bold text-gray-100 mb-4">Observations</h2>
+            <div className="plan-content text-gray-300 leading-relaxed whitespace-pre-wrap">
+              {processFilePathsInText(plan.sections.find(s => s.id === 'observations')?.content || '')}
             </div>
           </div>
         )}
@@ -328,36 +389,43 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
         {/* Approach Section */}
         {plan.sections.find(s => s.id === 'approach') && (
           <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Approach</h2>
-            <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-              {plan.sections.find(s => s.id === 'approach')?.content}
+            <h2 className="text-xl font-bold text-gray-100 mb-4">Approach</h2>
+            <div className="plan-content text-gray-300 leading-relaxed whitespace-pre-wrap">
+              {processFilePathsInText(plan.sections.find(s => s.id === 'approach')?.content || '')}
             </div>
           </div>
         )}
 
         {/* Implementation Files Section */}
         {plan.sections.find(s => s.id === 'files') && (
-          <div>
-            {plan.sections.find(s => s.id === 'files')?.items.map((item) => (
-              <div key={item.id} className="mb-6">
-                {/* File Path */}
-                <div className="font-mono text-blue-600 font-semibold mb-1">
-                  {item.filePath || 'File'}
+                <div>
+            <h2 className="text-xl font-bold text-gray-100 mb-4">Implementation Files</h2>
+            {plan.sections.find(s => s.id === 'files')?.items
+              .filter(item => {
+                // Filter out optional entries
+                const fileName = item.filePath?.split('/').pop() || item.filePath || '';
+                const actionType = getActionType(item);
+                const description = item.details || '';
+                
+                return !(fileName.toLowerCase().includes('(optional)') || 
+                        actionType.toLowerCase().includes('(optional)') || 
+                        description.toLowerCase().includes('(optional)'));
+              })
+              .map((item) => (
+              <div key={item.id} className="mb-8">
+                {/* File Name */}
+                <div className="font-mono text-blue-400 font-semibold text-lg mb-2">
+                  {item.filePath?.split('/').pop() || item.filePath || 'Unknown file'}
                 </div>
                 
-                {/* Status */}
-                <div className="text-sm text-gray-600 mb-1 uppercase font-medium">
-                  {item.type === 'create' ? 'NEW' : 'MODIFY'}
-                </div>
-                
-                {/* Reference Line */}
-                <div className="text-sm text-gray-500 mb-2">
-                  Add file or resource
+                {/* Action Type (MODIFY/NEW) */}
+                <div className="inline-block px-3 py-1 rounded-md text-sm font-bold mb-3 bg-blue-900/30 border border-blue-500 text-blue-400">
+                  {getActionType(item)}
                 </div>
                 
                 {/* Description */}
-                <div className="text-gray-700 leading-relaxed mb-4">
-                  {item.details}
+                <div className="plan-content text-gray-300 leading-relaxed whitespace-pre-wrap">
+                  {processFilePathsInText(item.details || '')}
                 </div>
               </div>
             ))}
@@ -367,16 +435,16 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
       
       {/* Follow-up conversation area */}
       {showFollowUp && onRefinePlan && (
-        <div className="border-t border-gray-200 p-6 bg-gray-50">
+        <div className="border-t border-gray-800 p-6 bg-gray-900">
           <div className="space-y-4">
-            <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <h4 className="text-lg font-semibold text-gray-100 flex items-center space-x-2">
+              <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
               <span>Continue the conversation</span>
             </h4>
             
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-400">
               Ask for modifications, clarifications, or additional features for your plan.
             </p>
             
@@ -385,13 +453,13 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
                 value={followUpPrompt}
                 onChange={(e) => setFollowUpPrompt(e.target.value)}
                 placeholder="e.g., 'Add error handling to the authentication', 'Include tests for the API endpoints', 'Make it mobile responsive'..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                className="w-full px-4 py-3 border border-gray-700 bg-gray-900 text-gray-200 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-purple-600 resize-none"
                 rows={3}
                 disabled={isRefining}
               />
               
               <div className="flex justify-between items-center">
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-gray-400">
                   {followUpPrompt.length} characters
                 </div>
                 
@@ -401,7 +469,7 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
                       setFollowUpPrompt('');
                       setShowFollowUp(false);
                     }}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
                     disabled={isRefining}
                   >
                     Cancel
@@ -416,7 +484,7 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
                       }
                     }}
                     disabled={!followUpPrompt.trim() || isRefining}
-                    className="px-6 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 rounded-lg transition-colors disabled:cursor-not-allowed flex items-center space-x-2"
+                    className="px-6 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800/60 rounded-lg transition-colors disabled:cursor-not-allowed flex items-center space-x-2"
                   >
                     {isRefining ? (
                       <>
@@ -428,7 +496,7 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
                       </>
                     ) : (
                       <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                         </svg>
                         <span>Send</span>
@@ -438,10 +506,10 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
                 </div>
               </div>
             </div>
-            
+
             {/* Example prompts */}
             <div className="mt-4">
-              <p className="text-xs text-gray-500 mb-2">💡 Quick suggestions:</p>
+              <p className="text-xs text-gray-400 mb-2">💡 Quick suggestions:</p>
               <div className="flex flex-wrap gap-2">
                 {[
                   'Add error handling',
@@ -454,7 +522,7 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
                   <button
                     key={suggestion}
                     onClick={() => setFollowUpPrompt(suggestion)}
-                    className="px-3 py-1 text-xs bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"
+                    className="px-3 py-1 text-xs bg-gray-900 border border-gray-700 text-gray-300 rounded-full hover:bg-gray-800 transition-colors"
                     disabled={isRefining}
                   >
                     {suggestion}
@@ -509,44 +577,44 @@ function PlanItemComponent({ item, onCopy, isCopied }: PlanItemComponentProps) {
 
   const getItemTypeColor = (type: string): string => {
     const colors: { [key: string]: string } = {
-      create: 'bg-green-100 text-green-800',
-      modify: 'bg-blue-100 text-blue-800',
-      install: 'bg-purple-100 text-purple-800',
-      configure: 'bg-yellow-100 text-yellow-800',
-      test: 'bg-indigo-100 text-indigo-800',
-      deploy: 'bg-red-100 text-red-800',
-      overview: 'bg-gray-100 text-gray-800',
+      create: 'bg-green-900/30 text-green-300',
+      modify: 'bg-blue-900/30 text-blue-300',
+      install: 'bg-purple-900/30 text-purple-300',
+      configure: 'bg-yellow-900/30 text-yellow-300',
+      test: 'bg-indigo-900/30 text-indigo-300',
+      deploy: 'bg-red-900/30 text-red-300',
+      overview: 'bg-gray-800 text-gray-300',
     };
-    return colors[type] || 'bg-gray-100 text-gray-800';
+    return colors[type] || 'bg-gray-800 text-gray-300';
   };
 
   return (
-    <div className="p-4 hover:bg-gray-50 transition-colors">
+    <div className="p-4 hover:bg-gray-800 transition-colors">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center space-x-3 mb-2">
             <span className="text-lg">{getItemIcon(item.type)}</span>
-            <h4 className="font-semibold text-gray-900">{item.title}</h4>
+            <h4 className="font-semibold text-gray-100">{item.title}</h4>
             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getItemTypeColor(item.type)}`}>
               {item.type.toUpperCase()}
             </span>
           </div>
           
-          <p className="text-gray-700 mb-3">{item.description}</p>
+          <p className="text-gray-300 mb-3">{item.description}</p>
           
           {item.filePath && (
             <div className="mb-2">
-              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-900 border border-gray-700 text-gray-300">
                 📁 {item.filePath}
               </span>
             </div>
           )}
           
-          <div className="bg-white border border-gray-200 rounded-md p-3 mb-3">
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{item.details}</pre>
+          <div className="bg-gray-900 border border-gray-700 rounded-md p-3 mb-3">
+            <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">{item.details}</pre>
           </div>
           
-          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
             {item.dependencies.length > 0 && (
               <div>
                 <span className="font-medium">Dependencies:</span> {item.dependencies.join(', ')}
@@ -563,7 +631,7 @@ function PlanItemComponent({ item, onCopy, isCopied }: PlanItemComponentProps) {
         
         <button
           onClick={() => onCopy(getItemText(item))}
-          className="ml-4 flex items-center space-x-1 text-blue-600 hover:text-blue-800 text-sm"
+          className="ml-4 flex items-center space-x-1 text-blue-400 hover:text-blue-300 text-sm"
         >
           {isCopied ? (
             <>

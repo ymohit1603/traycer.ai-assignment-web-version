@@ -4,12 +4,19 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import PromptArea from "./components/PromptArea";
 import UploadProgress from "./components/UploadProgress";
+import FileUpload from "./components/FileUpload";
+import FileTree from "./components/FileTree";
+import StreamingProgressTicker from "./components/StreamingProgressTicker";
 import PlanDisplay from "./components/PlanDisplay";
 import { StorageManager, StoredCodebase } from "./lib/storageManager";
 import { CodebaseIndex, CodebaseParser } from "./lib/codebaseParser";
 import { OpenAIService, GeneratedPlan, PlanGenerationProgress } from "./lib/openAIService";
 import { NewProjectRequirements } from "./lib/clarifyingQuestions";
 import NewProjectPlanning from "./components/NewProjectPlanning";
+import PlanHistory from "./components/PlanHistory";
+import IntegrationExamples from "./components/IntegrationExamples";
+import PlanProgressTracker from "./components/PlanProgress";
+import { PlanHistoryService, SavedPlan, PlanComparison } from "./lib/planHistory";
 
 export interface UploadedFile {
   name: string;
@@ -167,7 +174,6 @@ export default function Home() {
   });
   const [prompt, setPrompt] = useState<string>("");
   const [storedCodebase, setStoredCodebase] = useState<StoredCodebase | null>(null);
-  const [selectedFile, setSelectedFile] = useState<CodebaseIndex | null>(null);
   
   // Upload and Indexing State
   const [isIndexing, setIsIndexing] = useState(false);
@@ -188,9 +194,14 @@ export default function Home() {
   // Plan Generation Progress
   const [planProgress, setPlanProgress] = useState<PlanGenerationProgress | null>(null);
   
-  // Analysis Mode
-  const [useDeepAnalysis, setUseDeepAnalysis] = useState(true); // Cursor AI-like reading
+  // Analysis Mode (always deep analysis)
+  const useDeepAnalysis = true;
 
+  // Plan History State
+  const [showPlanHistory, setShowPlanHistory] = useState(false);
+  const [showIntegration, setShowIntegration] = useState(false);
+  const [showProgressTracker, setShowProgressTracker] = useState(false);
+  const [selectedSavedPlan, setSelectedSavedPlan] = useState<SavedPlan | null>(null);
 
 
   const handleFilesUploaded = (files: UploadedFile[]) => {
@@ -203,15 +214,7 @@ export default function Home() {
 
 
 
-  const handleFileSelect = (fileId: string) => {
-    if (storedCodebase) {
-      const file = storedCodebase.files.find(f => f.fileId === fileId);
-      if (file) {
-        setSelectedFile(file);
-        // File selected for viewing
-      }
-    }
-  };
+
 
 
 
@@ -449,6 +452,23 @@ export default function Home() {
       
       setGeneratedPlan(plan);
       setConversationHistory([promptText]); // Initialize conversation history
+      
+      // Automatically save the plan to history
+      try {
+        const saved = await PlanHistoryService.savePlan(
+          plan,
+          plan.title,
+          plan.overview,
+          plan.metadata.tags || [],
+          storedCodebase?.metadata.id,
+          promptText
+        );
+        setSelectedSavedPlan(saved);
+        console.log('✅ Plan saved to history');
+      } catch (error) {
+        console.warn('⚠️ Failed to save plan to history:', error);
+      }
+      
       toast.dismiss(); // Dismiss any loading toasts
       toast.success(`Plan generated successfully! ${plan.sections.length} sections created`);
       
@@ -524,6 +544,22 @@ Generate a complete project plan including:
       
       setGeneratedPlan(plan);
       setConversationHistory([prompt]); // Initialize conversation history 
+      
+      // Automatically save the plan to history
+      try {
+        await PlanHistoryService.savePlan(
+          plan,
+          plan.title,
+          plan.overview,
+          plan.metadata.tags || [],
+          undefined, // No codebase for new projects
+          prompt
+        );
+        console.log('✅ New project plan saved to history');
+      } catch (error) {
+        console.warn('⚠️ Failed to save new project plan to history:', error);
+      }
+      
       toast.dismiss();
       toast.success(`Project plan generated! ${plan.sections.length} sections created`);
       
@@ -582,6 +618,22 @@ User Request: ${prompt}`;
       
       setGeneratedPlan(plan);
       setConversationHistory([prompt]); // Initialize conversation history 
+      
+      // Automatically save the plan to history
+      try {
+        await PlanHistoryService.savePlan(
+          plan,
+          plan.title,
+          plan.overview,
+          plan.metadata.tags || [],
+          undefined, // No codebase for new projects
+          projectPrompt
+        );
+        console.log('✅ New project plan with requirements saved to history');
+      } catch (error) {
+        console.warn('⚠️ Failed to save new project plan to history:', error);
+      }
+      
       toast.dismiss();
       toast.success(`Project plan generated! ${plan.sections.length} sections created`);
       
@@ -648,6 +700,23 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
       });
       
       setGeneratedPlan(refinedPlan);
+      
+      // Save the refined plan as a new version
+      try {
+        const saved = await PlanHistoryService.savePlan(
+          refinedPlan,
+          refinedPlan.title + ' (Refined)',
+          refinedPlan.overview,
+          refinedPlan.metadata.tags || [],
+          storedCodebase?.metadata.id,
+          contextualPrompt
+        );
+        setSelectedSavedPlan(saved);
+        console.log('✅ Refined plan saved to history');
+      } catch (error) {
+        console.warn('⚠️ Failed to save refined plan to history:', error);
+      }
+      
       toast.dismiss();
       toast.success('Plan refined successfully!');
       
@@ -663,25 +732,35 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
     }
   };
 
+  // Plan History Event Handlers
+  const handlePlanSelect = (selectedPlan: SavedPlan) => {
+    console.log('📋 Loading plan from history:', selectedPlan.name);
+    setGeneratedPlan(selectedPlan);
+    setSelectedSavedPlan(selectedPlan);
+    setShowPlanHistory(false);
+    toast.success(`Loaded plan: ${selectedPlan.name}`);
+  };
 
-
-
+  const handlePlanCompare = (comparison: PlanComparison) => {
+    console.log('🔄 Comparing plans:', comparison.planA.name, 'vs', comparison.planB.name);
+    // For now, just show the first plan. In a more complete implementation,
+    // you might want to show a comparison view
+    setGeneratedPlan(comparison.planA);
+    setShowPlanHistory(false);
+    toast.success(`Comparing plans: ${comparison.planA.name} vs ${comparison.planB.name}`);
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 p-4 sm:p-6 lg:p-8">
+    <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 p-4 sm:p-6 lg:p-8 ${(isGeneratingPlan || isRefiningPlan) ? 'body-with-ticker' : ''}`}>
+      {/* Streaming Progress Ticker */}
+      <StreamingProgressTicker 
+        progress={planProgress} 
+        isVisible={isGeneratingPlan || isRefiningPlan} 
+      />
+      
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4">
-            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Traycer
-            </span>
-          </h1>
-          <p className="text-lg sm:text-xl text-gray-300 max-w-3xl mx-auto">
-            Upload your codebase and get detailed AI-powered implementation plans
-          </p>
-        </div>
-
+      
         {/* Main Content - Centered Prompt Area */}
         <div className="space-y-8">
                     {/* Prompt Area */}
@@ -691,46 +770,21 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                     onChange={setPrompt}
               placeholder="Describe what you want to implement in your codebase..."
             />
-            
-            {/* Analysis Mode Toggle */}
-            <div className="mt-6 flex justify-center">
-              <div className="bg-gray-700 rounded-lg p-1 flex">
-                <button
-                  onClick={() => setUseDeepAnalysis(false)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                    !useDeepAnalysis
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-gray-300 hover:text-white hover:bg-gray-600'
-                  }`}
-                >
-                  ⚡ Quick Analysis
-                </button>
-                <button
-                  onClick={() => setUseDeepAnalysis(true)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                    useDeepAnalysis
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'text-gray-300 hover:text-white hover:bg-gray-600'
-                  }`}
-                >
-                  🧠 Deep Analysis
-                </button>
-              </div>
-            </div>
-            
-            {/* Mode Description */}
-            <div className="mt-3 text-center">
-              <p className="text-sm text-gray-400">
-                {useDeepAnalysis ? (
-                  <>🔍 Cursor AI-like: Reads actual file contents for context-aware plans</>
-                ) : (
-                  <>⚡ Fast mode: Uses file metadata only for quick results</>
-                )}
-              </p>
-            </div>
+       
             
             {/* Buttons */}
             <div className="flex justify-center items-center space-x-4 mt-6">
+              {/* Plan History Button */}
+                      <button
+                onClick={() => setShowPlanHistory(true)}
+                className="bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center space-x-2 border border-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Plan History</span>
+              </button>
+
               {/* Upload Codebase Button */}
               <button
                 onClick={isIndexed ? undefined : handleDirectFolderUpload}
@@ -755,13 +809,13 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                     <span>{isIndexing ? 'Indexing...' : 'Upload Codebase'}</span>
                   </>
                 )}
-              </button>
+                      </button>
                       
               {/* Send Button */}
                       <button
                         onClick={handleSubmit}
                         disabled={!prompt.trim() || uploadProgress.isUploading || isGeneratingPlan || isIndexing}
-                className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200 disabled:cursor-not-allowed flex items-center justify-center shadow-lg"
+                className="bg-gray-600 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200 disabled:cursor-not-allowed flex items-center justify-center shadow-lg"
                       >
                         {isGeneratingPlan ? (
                           <>
@@ -783,6 +837,35 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
             </div>
           )}
 
+          {/* Files Uploaded Info - Always visible after upload */}
+          {uploadedFiles.length > 0 && !uploadProgress.isUploading && (
+            <div className="bg-gray-800 rounded-xl shadow-2xl border border-blue-500 p-6">
+              <div className="flex items-center space-x-2 text-blue-400 mb-3">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="font-medium">Files Uploaded</span>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm text-gray-300">
+                  {uploadedFiles.length} files uploaded • {uploadedFiles.filter(f => f.content).length} text files with content
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {uploadedFiles.slice(0, 10).map((file, index) => (
+                    <span key={index} className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded">
+                      {file.name}
+                    </span>
+                  ))}
+                  {uploadedFiles.length > 10 && (
+                    <span className="px-2 py-1 bg-gray-600 text-gray-400 text-xs rounded">
+                      +{uploadedFiles.length - 10} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Indexing Progress */}
           {isIndexing && (
             <div className="bg-gray-800 rounded-xl shadow-2xl border border-blue-500 p-6">
@@ -799,14 +882,16 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
             </div>
           )}
 
-          {/* Success Message */}
+
+
+          {/* Indexing Success Message */}
           {isIndexed && storedCodebase && (
             <div className="bg-gray-800 rounded-xl shadow-2xl border border-green-500 p-6">
               <div className="flex items-center space-x-2 text-green-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span className="font-medium">Indexed</span>
+                <span className="font-medium">Codebase Indexed</span>
               </div>
               <p className="text-sm text-gray-300 mt-1">
                 {storedCodebase.metadata.totalFiles} files processed • {storedCodebase.metadata.languages.join(', ')}
@@ -817,6 +902,32 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
           {/* Plan Display */}
           {(generatedPlan || isGeneratingPlan || planError) && (
             <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-lg font-semibold text-gray-100">Implementation Plan</h3>
+                {generatedPlan && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowIntegration(true)}
+                      className="px-3 py-2 text-sm text-gray-200 border border-gray-700 rounded hover:bg-gray-700"
+                    >
+                      Export / Copy
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedSavedPlan((prev) => {
+                          const plans = PlanHistoryService.getAllPlans();
+                          const found = plans.find(p => p.id === (generatedPlan as any).id) || null;
+                          return found;
+                        });
+                        setShowProgressTracker(true);
+                      }}
+                      className="px-3 py-2 text-sm text-gray-200 border border-gray-700 rounded hover:bg-gray-700"
+                    >
+                      Track Progress
+                    </button>
+                  </div>
+                )}
+              </div>
               <PlanDisplay
                 plan={generatedPlan}
                 isLoading={isGeneratingPlan}
@@ -839,6 +950,35 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
           onClose={() => setShowNewProjectPlanning(false)}
           onPlanGenerate={handleNewProjectPlan}
           apiKey={process.env.NEXT_PUBLIC_OPEN_AI_API || ''}
+        />
+      )}
+      
+      {/* Plan History Modal */}
+      {showPlanHistory && (
+        <PlanHistory
+          isOpen={showPlanHistory}
+          onClose={() => setShowPlanHistory(false)}
+          onPlanSelect={handlePlanSelect}
+          onPlanCompare={handlePlanCompare}
+          currentCodebaseId={storedCodebase?.metadata.id}
+        />
+      )}
+
+      {/* Integration Examples Modal */}
+      {showIntegration && generatedPlan && (
+        <IntegrationExamples
+          plan={generatedPlan}
+          isOpen={showIntegration}
+          onClose={() => setShowIntegration(false)}
+        />
+      )}
+      
+      {/* Plan Progress Tracker Modal */}
+      {showProgressTracker && selectedSavedPlan && (
+        <PlanProgressTracker
+          plan={selectedSavedPlan}
+          isOpen={showProgressTracker}
+          onClose={() => setShowProgressTracker(false)}
         />
       )}
     </div>

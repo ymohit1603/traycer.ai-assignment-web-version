@@ -133,14 +133,14 @@ export default function PlanHistory({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-800">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-6 border-b border-gray-800">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Plan History</h2>
-              <p className="text-gray-600 mt-1">Manage your saved implementation plans</p>
+              <h2 className="text-2xl font-semibold text-gray-100">Plan History</h2>
+              <p className="text-gray-400 mt-1">Manage your saved implementation plans</p>
             </div>
             
             <div className="flex items-center space-x-3">
@@ -148,7 +148,7 @@ export default function PlanHistory({
                 <>
                   <button
                     onClick={() => setShowExportModal(true)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex items-center space-x-2"
+                    className="px-4 py-2 text-sm font-medium text-gray-200 hover:text-white hover:bg-gray-800 rounded-lg transition-colors flex items-center space-x-2 border border-gray-700"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -178,7 +178,7 @@ export default function PlanHistory({
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                   isCompareMode
                     ? 'text-white bg-blue-600'
-                    : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
+                    : 'text-gray-200 hover:text-white hover:bg-gray-800 border border-gray-700'
                 }`}
               >
                 {isCompareMode ? 'Exit Compare' : 'Compare Plans'}
@@ -186,7 +186,7 @@ export default function PlanHistory({
               
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 p-2 rounded-md hover:bg-gray-100"
+                className="text-gray-400 hover:text-gray-200 p-2 rounded-md hover:bg-gray-800"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -198,21 +198,21 @@ export default function PlanHistory({
           {/* Statistics */}
           {statistics && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-              <div className="bg-blue-50 rounded-lg p-3">
-                <div className="text-2xl font-bold text-blue-600">{statistics.totalPlans}</div>
-                <div className="text-xs text-blue-600">Total Plans</div>
+              <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                <div className="text-2xl font-bold text-blue-400">{statistics.totalPlans}</div>
+                <div className="text-xs text-blue-400">Total Plans</div>
               </div>
-              <div className="bg-green-50 rounded-lg p-3">
-                <div className="text-2xl font-bold text-green-600">{statistics.completedPlans}</div>
-                <div className="text-xs text-green-600">Completed</div>
+              <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                <div className="text-2xl font-bold text-green-400">{statistics.completedPlans}</div>
+                <div className="text-xs text-green-400">Completed</div>
               </div>
-              <div className="bg-yellow-50 rounded-lg p-3">
-                <div className="text-2xl font-bold text-yellow-600">{statistics.inProgressPlans}</div>
-                <div className="text-xs text-yellow-600">In Progress</div>
+              <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                <div className="text-2xl font-bold text-yellow-400">{statistics.inProgressPlans}</div>
+                <div className="text-xs text-yellow-400">In Progress</div>
               </div>
-              <div className="bg-purple-50 rounded-lg p-3">
-                <div className="text-2xl font-bold text-purple-600">{statistics.favoritePlans}</div>
-                <div className="text-xs text-purple-600">Favorites</div>
+              <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                <div className="text-2xl font-bold text-purple-400">{statistics.favoritePlans}</div>
+                <div className="text-xs text-purple-400">Favorites</div>
               </div>
             </div>
           )}
@@ -226,9 +226,9 @@ export default function PlanHistory({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search plans by name, description, or tags..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-700 bg-gray-900 text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 placeholder-gray-500"
                 />
-                <svg className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="absolute left-3 top-2.5 w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
@@ -237,7 +237,7 @@ export default function PlanHistory({
             <select
               value={selectedFilter}
               onChange={(e) => setSelectedFilter(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-3 py-2 border border-gray-700 bg-gray-900 text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
             >
               <option value="all">All Plans</option>
               <option value="recent">Recent</option>
@@ -250,12 +250,12 @@ export default function PlanHistory({
         </div>
 
         {/* Plans List */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-900">
           {plans.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 text-4xl mb-4">📋</div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No plans found</h3>
-              <p className="text-gray-600">
+              <div className="text-gray-500 text-4xl mb-4">📋</div>
+              <h3 className="text-lg font-medium text-gray-100 mb-2">No plans found</h3>
+              <p className="text-gray-400">
                 {searchQuery ? 'Try adjusting your search criteria' : 'Start by creating your first implementation plan'}
               </p>
             </div>
@@ -280,17 +280,17 @@ export default function PlanHistory({
 
         {/* Export Modal */}
         {showExportModal && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Export Plans</h3>
-              <p className="text-gray-600 mb-6">
+          <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center z-10">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-100 mb-4">Export Plans</h3>
+              <p className="text-gray-400 mb-6">
                 Export {selectedPlans.length > 0 ? `${selectedPlans.length} selected plans` : 'all plans'} as JSON file.
               </p>
               
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => setShowExportModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors border border-gray-700"
                 >
                   Cancel
                 </button>
@@ -361,8 +361,8 @@ function PlanCard({
 
   return (
     <div 
-      className={`bg-white border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer relative ${
-        isCompareMode && isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+      className={`bg-gray-900 border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer relative ${
+        isCompareMode && isSelected ? 'border-blue-500 bg-blue-900/20' : 'border-gray-800'
       } ${
         isCompareMode && !canSelect ? 'opacity-50 cursor-not-allowed' : ''
       }`}
@@ -372,7 +372,7 @@ function PlanCard({
       {isCompareMode && (
         <div className="absolute top-2 right-2">
           <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-            isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+            isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-600'
           }`}>
             {isSelected && (
               <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -386,8 +386,8 @@ function PlanCard({
       {/* Plan Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 truncate">{plan.name}</h3>
-          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{plan.description}</p>
+          <h3 className="font-semibold text-gray-100 truncate">{plan.name}</h3>
+          <p className="text-sm text-gray-400 mt-1 line-clamp-2">{plan.description}</p>
         </div>
         
         {!isCompareMode && (
@@ -397,8 +397,8 @@ function PlanCard({
                 e.stopPropagation();
                 onToggleFavorite(plan.id);
               }}
-              className={`p-1 rounded hover:bg-gray-100 ${
-                plan.isFavorite ? 'text-yellow-500' : 'text-gray-400'
+              className={`p-1 rounded hover:bg-gray-800 ${
+                plan.isFavorite ? 'text-yellow-400' : 'text-gray-400'
               }`}
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -411,7 +411,7 @@ function PlanCard({
                 e.stopPropagation();
                 onDelete(plan.id);
               }}
-              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600"
+              className="p-1 rounded hover:bg-gray-800 text-gray-400 hover:text-red-400"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -426,19 +426,19 @@ function PlanCard({
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getComplexityColor(plan.metadata.complexity)}`}>
           {plan.metadata.complexity.toUpperCase()}
         </span>
-        <span className="text-xs text-gray-500">{plan.metadata.estimatedTimeHours}h</span>
+        <span className="text-xs text-gray-400">{plan.metadata.estimatedTimeHours}h</span>
       </div>
 
       {/* Tags */}
       {plan.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-3">
           {plan.tags.slice(0, 3).map((tag, index) => (
-            <span key={index} className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+            <span key={index} className="bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded">
               {tag}
             </span>
           ))}
           {plan.tags.length > 3 && (
-            <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+            <span className="bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded">
               +{plan.tags.length - 3}
             </span>
           )}
@@ -446,7 +446,7 @@ function PlanCard({
       )}
 
       {/* Footer */}
-      <div className="text-xs text-gray-500 space-y-1">
+      <div className="text-xs text-gray-400 space-y-1">
         <div>Created: {formatDate(plan.createdAt)}</div>
         {plan.updatedAt !== plan.createdAt && (
           <div>Updated: {formatDate(plan.updatedAt)}</div>

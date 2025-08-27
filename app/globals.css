@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0b0b0b;
+  --foreground: #e5e7eb;
 }
 
 @theme inline {
@@ -14,8 +14,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0b0b0b;
+    --foreground: #e5e7eb;
   }
 }
 
@@ -23,4 +23,57 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Shimmer animation for progress ticker */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Ensure body has proper padding when ticker is visible */
+.body-with-ticker {
+  padding-top: 80px;
+}
+
+/* Style for file paths in plan content */
+.plan-content {
+  /* Process and style file paths */
+}
+
+/* Style all code elements and file paths */
+.plan-content code,
+.plan-content [class*="file-path"],
+.plan-content kbd {
+  color: #60a5fa !important; /* blue-400 */
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-weight: 600;
+}
+
+/* Style backtick-wrapped content */
+.plan-content strong code,
+.plan-content code:not(pre > code) {
+  color: #60a5fa !important; /* blue-400 */
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* Style file paths that are wrapped in strong/bold tags */
+.plan-content strong {
+  /* Check if it contains file-like patterns */
+}
+
+/* Target patterns that look like file paths even without code wrapping */
+.plan-content {
+  /* This will be handled by JavaScript parsing */
 }

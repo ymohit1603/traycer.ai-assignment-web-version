@@ -64,11 +64,11 @@ export class OpenAIService {
   private openai: OpenAI;
   private apiKey: string;
 
-  constructor() {
+  constructor(apiKeyOverride?: string) {
     console.log('🔧 Initializing OpenAI Service...');
     
     // Get API key from environment variable
-    this.apiKey = process.env.OPEN_AI_API || process.env.NEXT_PUBLIC_OPEN_AI_API || '';
+    this.apiKey = apiKeyOverride || process.env.OPEN_AI_API || process.env.NEXT_PUBLIC_OPEN_AI_API || '';
     
     if (!this.apiKey) {
       console.error('❌ No API key found in environment variables');
@@ -110,7 +110,7 @@ export class OpenAIService {
       onProgress?.({
         step: 'analyzing',
         progress: 10,
-        message: 'Analyzing codebase structure...',
+        message: '🧠 Entering deep analysis mode...',
       });
       
       const context = await this.prepareContext(storedCodebase, userPrompt, onProgress, useDeepAnalysis);
@@ -128,7 +128,7 @@ export class OpenAIService {
         message: '🤖 Connecting to AI model...',
       });
       
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       onProgress?.({
         step: 'generating',
@@ -136,12 +136,36 @@ export class OpenAIService {
         message: '💭 AI is analyzing your requirements...',
       });
       
+      await new Promise(resolve => setTimeout(resolve, 400));
+      
+      onProgress?.({
+        step: 'generating',
+        progress: 70,
+        message: '🔍 AI is studying codebase patterns...',
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      onProgress?.({
+        step: 'generating',
+        progress: 75,
+        message: '🎯 AI is crafting focused implementation strategy...',
+      });
+      
       const planContent = await this.callOpenAI(context, maxTokens);
       
       onProgress?.({
         step: 'generating',
         progress: 80,
-        message: '🧠 AI is formulating implementation strategy...',
+        message: '🧠 AI is formulating Cursor AI-ready plan...',
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      onProgress?.({
+        step: 'generating',
+        progress: 85,
+        message: '📝 AI is organizing implementation steps...',
       });
       console.log('✅ OpenAI API response received:', {
         responseLength: planContent.length
@@ -152,7 +176,7 @@ export class OpenAIService {
       onProgress?.({
         step: 'finalizing',
         progress: 90,
-        message: 'Structuring plan sections...',
+        message: '📋 Structuring plan sections...',
       });
       
       const structuredPlan = await this.parsePlanResponse(planContent, context);
@@ -165,7 +189,7 @@ export class OpenAIService {
       onProgress?.({
         step: 'complete',
         progress: 100,
-        message: 'Plan generation complete!',
+        message: '✅ Plan generation complete!',
       });
       
       return structuredPlan;
@@ -182,7 +206,7 @@ export class OpenAIService {
     onProgress?.({
       step: 'analyzing',
       progress: 20,
-      message: 'Reading project metadata...',
+      message: '📊 Reading project metadata...',
     });
     
     const languages = storedCodebase.metadata.languages;
@@ -195,11 +219,11 @@ export class OpenAIService {
     onProgress?.({
       step: 'analyzing',
       progress: 30,
-      message: 'Searching for relevant files...',
+      message: '🔍 Searching for relevant files...',
     });
     
     const searchResults = searchEngine.search(userPrompt, {
-      maxResults: useDeepAnalysis ? 10 : 20, // More results for lightweight mode
+      maxResults: useDeepAnalysis ? 8 : 12, // Increased for more comprehensive analysis
       includeContent: useDeepAnalysis, // Only include content in deep analysis
     });
     
@@ -210,34 +234,51 @@ export class OpenAIService {
       // DEEP ANALYSIS: Actually read file contents (Cursor AI-like)
       onProgress?.({
         step: 'analyzing',
-        progress: 30,
+        progress: 32,
         message: '🧠 Entering deep analysis mode...',
       });
       
-      for (let i = 0; i < Math.min(searchResults.length, 5); i++) {
+      for (let i = 0; i < Math.min(searchResults.length, 5); i++) { // Analyze up to 5 most relevant files
         const result = searchResults[i];
         const file = searchEngine.getFileById(result.fileId);
         
         if (file && file.content) {
+          // Reading file
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
-            progress: 35 + (i * 5),
+            progress: 35 + (i * 8),
             message: `📄 Reading ${file.filePath}...`,
           });
           
-          // Show reasoning steps
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Show detailed reasoning steps like Cursor AI
+          await new Promise(resolve => setTimeout(resolve, 300));
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
-            progress: 35 + (i * 5),
-            message: `💭 Analyzing patterns in ${file.filePath}...`,
+            progress: 37 + (i * 8),
+            message: `🔍 Analyzing code structure in ${file.filePath}...`,
+          });
+          
+          await new Promise(resolve => setTimeout(resolve, 400));
+          onProgress?.({
+            step: 'analyzing',
+            currentFile: file.filePath,
+            progress: 39 + (i * 8),
+            message: `🧠 Understanding patterns and dependencies...`,
+          });
+          
+          await new Promise(resolve => setTimeout(resolve, 300));
+          onProgress?.({
+            step: 'analyzing',
+            currentFile: file.filePath,
+            progress: 41 + (i * 8),
+            message: `💡 Identifying implementation opportunities...`,
           });
           
           // Include file content (truncated if too long)
-          const truncatedContent = file.content.length > 2000 
-            ? file.content.substring(0, 2000) + '\n... (truncated)'
+          const truncatedContent = file.content.length > 1500 
+            ? file.content.substring(0, 1500) + '\n... (truncated for context)'
             : file.content;
             
           relevantFilesWithContent.push({
@@ -246,8 +287,14 @@ export class OpenAIService {
             relevance: result.relevanceScore
           });
           
-          // Small delay to make the reading indicator visible
-          await new Promise(resolve => setTimeout(resolve, 300));
+          // Final reasoning step
+          await new Promise(resolve => setTimeout(resolve, 200));
+          onProgress?.({
+            step: 'analyzing',
+            currentFile: file.filePath,
+            progress: 43 + (i * 8),
+            message: `✅ File analysis complete`,
+          });
         }
       }
     } else {
@@ -357,43 +404,52 @@ export class OpenAIService {
   }
 
   private buildSystemPrompt(): string {
-    return `You are an expert software architect and technical lead specializing in creating detailed, actionable implementation plans. Your role is to analyze codebases and generate comprehensive plans that developers can follow to implement new features or fix issues.
+    return `You are an elite software architect with extensive experience in modern web development, specializing in creating comprehensive, actionable implementation plans that developers can execute flawlessly.
 
-## Your Expertise:
-- Full-stack development across multiple languages and frameworks
-- Software architecture and design patterns
-- Project planning and task breakdown
-- Dependency management and configuration
-- Testing strategies and deployment practices
+## Your Mission:
+Generate detailed, professional implementation plans that provide complete guidance for building features from start to finish. Your plans should be thorough, well-structured, and include every necessary file and configuration.
 
-## Plan Generation Rules:
-1. **NO CODE**: Never include actual code in your plans - only descriptions and instructions
-2. **Be Specific**: Provide exact file paths, function names, and detailed steps
-3. **Logical Order**: Arrange files in dependency order (what must be done first)
-4. **Comprehensive Coverage**: Include files to create/modify, dependencies, configuration, testing
-5. **Actionable Items**: Each step should be clear and implementable
-6. **Context Awareness**: Use the provided file contents to understand existing patterns
-
-## Required Plan Structure:
+## MANDATORY FORMAT - Follow this EXACT structure:
 
 **Observations**
-Analyze the current codebase structure, technology stack, patterns, and identify what exists and what's missing for the requested feature. Be specific about current architecture, existing components, data flow, and any limitations or opportunities.
+Write a comprehensive paragraph (4-6 sentences) that thoroughly analyzes the current codebase state. Identify the existing architecture, technology stack, current limitations, and what needs to be implemented. Discuss relevant patterns, components, services, and infrastructure already in place. Explain why the requested feature is needed and how it fits into the current system. Be detailed and technical in your analysis.
 
 **Approach**
-Explain your high-level strategy and reasoning. Why this approach? What are the benefits? How does it fit with the existing architecture? Include bullet points for key implementation points:
-• Strategy point 1
-• Strategy point 2
-• Strategy point 3
+Start with 2-3 sentences explaining your overall implementation strategy and why it's optimal for this codebase. Then outline your approach in numbered phases:
+
+Phase 1: [Brief description of first major step]
+Phase 2: [Brief description of second major step]  
+Phase 3: [Brief description of third major step]
+Phase 4: [Brief description of fourth major step]
+
+Include a final sentence about future considerations or benefits of this approach.
 
 **Implementation Files**
-List each file that needs to be created or modified, in logical dependency order:
+List all necessary files in logical implementation order. For each file, use this EXACT format:
 
-/path/to/file.ext
-STATUS (NEW/MODIFY)
-Add file or resource
-Detailed description of what needs to be done in this file, including specific functions, components, or configurations to add/modify. Explain the purpose and how it integrates with the existing codebase.
+filename.ext
+MODIFY or NEW
+Detailed description of what needs to be implemented in this file. Include specific component names, functions, interfaces, configurations, and implementation details. Explain the purpose, key functionality, dependencies, and how it integrates with other parts of the system. Mention specific imports, exports, props, state management, error handling, and any special considerations. Be comprehensive but avoid actual code - focus on clear, actionable instructions that a developer can follow.
 
-Format exactly as shown above with proper spacing and structure. Be thorough, specific, and ensure all recommendations are actionable and follow existing code patterns.`;
+## Critical Requirements:
+1. **COMPREHENSIVE COVERAGE**: Include ALL necessary files for a complete implementation
+2. **DETAILED INSTRUCTIONS**: Each file description should be thorough and actionable  
+3. **LOGICAL ORDER**: List files in the order they should be implemented
+4. **CLEAR LABELS**: Mark each file as either MODIFY (existing file) or NEW (create new file)
+5. **NO CODE**: Provide detailed instructions but never include actual code snippets
+6. **INTEGRATION FOCUS**: Clearly explain how each piece connects to existing code
+7. **COMPLETE FEATURE**: Ensure the plan results in a fully working feature
+8. **TECHNICAL DEPTH**: Include specific technical details, dependencies, and configurations
+
+## Quality Standards:
+- Plans should enable developers to build the complete feature
+- Every instruction should be immediately actionable
+- Include all necessary configurations, dependencies, and setup steps
+- Explain the reasoning behind architectural decisions
+- Provide comprehensive coverage without overwhelming detail
+- Focus on professional, production-ready implementations
+
+Remember: Your goal is to create a complete, professional implementation plan that covers every aspect needed to successfully build the requested feature.`;
   }
 
   private buildUserPrompt(context: ContextData): string {
@@ -408,35 +464,43 @@ ${file.content}
 
 ` : '';
 
-    return `Analyze this codebase and create a detailed implementation plan for the user's request.
+    return `Analyze this codebase and create a COMPREHENSIVE, PROFESSIONAL implementation plan.
 
-## Codebase Analysis:
+## Codebase Context:
 ${context.codebaseOverview}
 
-## Project Structure:
-${context.projectStructure}
+## Project Architecture:
+${context.projectStructure.split('\n').slice(0, 15).join('\n')}
 
-## Key Components Found:
-${context.keyComponents.slice(0, 20).join(', ')}
+## Key Components and Utilities:
+${context.keyComponents.slice(0, 12).join(', ')}
 
-## Existing Dependencies:
-${context.dependencies.slice(0, 20).join(', ')}
+## Current Dependencies:
+${context.dependencies.slice(0, 15).join(', ')}
 
-## Relevant Files Found:
-${context.relevantFiles.slice(0, 15).join('\n')}
+## Most Relevant Files:
+${context.relevantFiles.slice(0, 8).join('\n')}
 
-${fileContentsSection}## User Request:
+${fileContentsSection}## User's Request:
 "${context.userPrompt}"
 
-## Instructions:
-Create a comprehensive implementation plan using the EXACT format specified in the system prompt:
-1. Start with **Observations** - analyze current state and what's needed
-2. Follow with **Approach** - explain strategy with bullet points
-3. List **Implementation Files** in dependency order with exact format
+## Instructions for Implementation Plan:
+Create a COMPREHENSIVE implementation plan following the EXACT format specified in the system prompt:
 
-Use the provided file contents to understand existing patterns, naming conventions, and architecture. Be specific about file paths, function names, and how new code integrates with existing code.
+1. **Observations** - Write a detailed paragraph (4-6 sentences) analyzing the current state, architecture, and what needs to be implemented
+2. **Approach** - Explain strategy + numbered phases + future considerations
+3. **Implementation Files** - All necessary files with filename, MODIFY/NEW label, and detailed instructions
 
-The plan should be actionable enough that any developer can follow it to implement the requested feature while maintaining consistency with the existing codebase.`;
+## Critical Requirements:
+- Provide COMPLETE coverage for the entire feature
+- Include ALL necessary files, configurations, and dependencies
+- Write detailed, actionable instructions for each file
+- Use existing codebase patterns and architecture
+- Include proper error handling, types, and integrations
+- Ensure the plan results in a fully working, production-ready feature
+- Be thorough but maintain clarity and organization
+
+The goal is a complete, professional implementation plan that covers every aspect needed to successfully build the requested feature from start to finish.`;
   }
 
   private async parsePlanResponse(response: string, context: ContextData): Promise<GeneratedPlan> {
@@ -555,26 +619,60 @@ The plan should be actionable enough that any developer can follow it to impleme
   private parseFileEntries(filesContent: string): PlanItem[] {
     const items: PlanItem[] = [];
     
-    // Split by file path patterns (lines starting with /)
-    const fileBlocks = filesContent.split(/(?=^\/)/m).filter(block => block.trim());
+    // Split by filename patterns - look for lines that are followed by MODIFY or NEW
+    const fileBlocks = filesContent.split(/(?=^[^\n]*\n(?:MODIFY|NEW))/m).filter(block => block.trim());
     
+    // Process all file blocks for comprehensive implementation
     fileBlocks.forEach((block, index) => {
       const lines = block.trim().split('\n');
-      if (lines.length < 3) return;
+      if (lines.length < 3) return; // Need at least filename, MODIFY/NEW, and description
       
-      const filePath = lines[0].trim();
-      const status = lines[1].trim();
-      const reference = lines.length > 2 ? lines[2].trim() : '';
-      const description = lines.slice(3).join('\n').trim();
+      const fileName = lines[0].trim();
+      const actionType = lines[1].trim(); // MODIFY or NEW
+      const descriptionLines = lines.slice(2);
+      const description = descriptionLines.join('\n').trim();
       
-      const isNew = status.includes('NEW');
+      // Skip entries marked as optional
+      if (fileName.toLowerCase().includes('(optional)') || 
+          actionType.toLowerCase().includes('(optional)') || 
+          description.toLowerCase().includes('(optional)')) {
+        return;
+      }
+      
+      // Determine if this is a new file or modification based on the action type
+      const isNew = actionType.toUpperCase() === 'NEW';
       const itemType = isNew ? 'create' : 'modify';
+      
+      // For file path, if it doesn't start with a path separator, assume it's in the appropriate directory
+      let filePath = fileName;
+      if (!fileName.includes('/') && !fileName.includes('\\')) {
+        // Try to infer the path based on file type
+        if (fileName.endsWith('.tsx') || fileName.endsWith('.jsx')) {
+          filePath = fileName.startsWith('page.') ? `app/${fileName}` : `app/components/${fileName}`;
+        } else if (fileName.endsWith('.ts') && !fileName.endsWith('.d.ts')) {
+          filePath = `app/lib/${fileName}`;
+        } else if (fileName.endsWith('.d.ts')) {
+          filePath = `types/${fileName}`;
+        } else if (fileName === 'package.json') {
+          filePath = fileName;
+        } else if (fileName.startsWith('.env')) {
+          filePath = fileName;
+        } else if (fileName.endsWith('.config.ts') || fileName.endsWith('.config.js')) {
+          filePath = fileName;
+        } else if (fileName.includes('middleware')) {
+          filePath = fileName;
+        } else if (fileName.includes('route.ts')) {
+          filePath = `app/api/${fileName.replace('route.ts', '').replace(/[^a-zA-Z0-9]/g, '')}/route.ts`;
+        } else {
+          filePath = `app/${fileName}`;
+        }
+      }
       
       items.push({
         id: `file_${index}`,
         type: itemType,
-        title: `${isNew ? 'Create' : 'Modify'} ${filePath.split('/').pop() || filePath}`,
-        description: `${isNew ? 'Create new file:' : 'Modify existing file:'} ${filePath}`,
+        title: `${isNew ? 'Create' : 'Modify'} ${fileName}`,
+        description: `${actionType}: ${fileName}`,
         filePath: filePath,
         details: description,
         dependencies: index > 0 ? [`file_${index - 1}`] : [],
@@ -583,6 +681,39 @@ The plan should be actionable enough that any developer can follow it to impleme
     });
     
     return items;
+  }
+
+  private isLikelyNewFile(filePath: string, description: string): boolean {
+    // Check for common indicators that this is a new file
+    const newFileIndicators = [
+      'create new',
+      'create a new',
+      'add new',
+      'new file',
+      'initialize',
+      'setup',
+      'configure new'
+    ];
+    
+    const lowerDescription = description.toLowerCase();
+    const hasNewIndicator = newFileIndicators.some(indicator => 
+      lowerDescription.includes(indicator)
+    );
+    
+    // Also check for common new file extensions/patterns
+    const commonNewFiles = [
+      '.env.local',
+      '/middleware.ts',
+      '/route.ts',
+      'Provider.tsx',
+      'AuthStatus.tsx'
+    ];
+    
+    const isCommonNewFile = commonNewFiles.some(pattern => 
+      filePath.includes(pattern)
+    );
+    
+    return hasNewIndicator || isCommonNewFile;
   }
 
   private generatePlanTitle(userPrompt: string): string {
@@ -946,88 +1077,34 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
 - Deployment and infrastructure setup
 - Requirements analysis and clarification
 
-## New Project Planning Rules:
+## CRITICAL: You must format your response in this EXACT structure with these specific headings:
+
+**Observations**
+Analyze the user's request and current requirements. Identify what type of application they want to build, what technologies might be suitable, and any gaps or unclear requirements. Be specific about project scope, target audience, and technical considerations.
+
+**Approach**
+Explain your recommended strategy and technology choices. Why this approach? What are the benefits? How does it address the user's needs? Start with a paragraph explanation, then include bullet points for key implementation strategy:
+• Technology stack recommendation with rationale
+• Development approach and methodology
+• Key architectural decisions
+• Deployment and hosting strategy
+
+**Implementation Files**
+List each file/component that needs to be created in logical order. Use EXACTLY this format for each item:
+
+/path/to/file.ext
+Add [describe what to add - dependency, component, etc.]
+Detailed description of what needs to be done in this file, including specific setup steps, configurations, or implementations. Explain the purpose and how it fits into the overall project architecture.
+
+## Important Formatting Rules:
 1. **NO CODE**: Never include actual code - only descriptions and setup instructions
 2. **INTELLIGENT RECOMMENDATIONS**: Analyze the user's request and recommend appropriate technologies
-3. **CLARIFYING QUESTIONS**: When requirements are unclear, include specific questions in the overview
+3. **CLARIFYING QUESTIONS**: Include specific questions in the Observations when requirements are unclear
 4. **Complete Setup**: Include everything from project initialization to deployment
-5. **Technology-Specific**: Tailor instructions to the recommended tech stack
-6. **Best Practices**: Include industry standards and conventions
-7. **Development Workflow**: Include testing, linting, and CI/CD considerations
-8. **Progressive Implementation**: Start with MVP, then add advanced features
+5. **Exact Format**: Follow the file format above precisely - file path, then "Add [description]", then detailed explanation
+6. **Progressive Implementation**: Start with MVP setup, then add advanced features
 
-## Plan Structure (use this EXACT format):
-\`\`\`json
-{
-  "title": "Project setup and implementation plan",
-  "overview": "Complete plan for building the project from scratch. If the user's requirements are vague, include specific clarifying questions they should consider, such as: preferred tech stack, target platform, database requirements, authentication needs, deployment preferences, etc.",
-  "sections": [
-    {
-      "title": "Requirements & Tech Stack Clarification",
-      "type": "overview", 
-      "priority": "high",
-      "content": "Based on your request, here are my recommendations and questions to consider",
-      "items": [
-        {
-          "type": "overview",
-          "title": "Recommended Tech Stack",
-          "description": "Suggested technologies based on your requirements",
-          "details": "List recommended frameworks, languages, databases, etc. with rationale",
-          "dependencies": [],
-          "estimatedTime": "Planning phase"
-        },
-        {
-          "type": "overview", 
-          "title": "Clarifying Questions",
-          "description": "Questions to help refine the implementation approach",
-          "details": "List specific questions about: target audience, scale, performance requirements, budget, timeline, team expertise, etc.",
-          "dependencies": [],
-          "estimatedTime": "Planning phase"
-        }
-      ]
-    },
-    {
-      "title": "Project Setup",
-      "type": "configuration",
-      "priority": "high",
-      "content": "Initial project setup and environment configuration",
-      "items": [
-        {
-          "type": "create",
-          "title": "Initialize project",
-          "description": "Set up project structure and configuration",
-          "details": "Step-by-step project initialization",
-          "dependencies": [],
-          "estimatedTime": "1-2 hours"
-        }
-      ]
-    },
-    {
-      "title": "Core Implementation",
-      "type": "steps",
-      "priority": "high",
-      "content": "Main application development steps",
-      "items": []
-    },
-    {
-      "title": "Testing & Quality",
-      "type": "testing",
-      "priority": "medium",
-      "content": "Testing setup and quality assurance",
-      "items": []
-    },
-    {
-      "title": "Deployment",
-      "type": "deployment",
-      "priority": "low",
-      "content": "Production deployment and hosting setup",
-      "items": []
-    }
-  ]
-}
-\`\`\`
-
-Focus on creating a production-ready application with proper architecture, testing, and deployment strategies. Always include tech stack recommendations and clarifying questions when the user's request lacks specific technical details.`;
+Format exactly as shown above with proper spacing and structure. Always include tech stack recommendations and clarifying questions when the user's request lacks specific technical details.`;
   }
 
   private buildNewProjectUserPrompt(context: ContextData): string {

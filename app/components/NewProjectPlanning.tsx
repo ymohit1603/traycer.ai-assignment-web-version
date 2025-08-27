@@ -142,18 +142,18 @@ export default function NewProjectPlanning({ onPlanGenerate, onClose, isOpen, ap
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-800">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
+        <div className="p-6 border-b border-gray-800 bg-gradient-to-r from-gray-900 via-gray-900 to-gray-900">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-2xl font-semibold text-gray-900">New Project Planning</h2>
-              <p className="text-gray-600 mt-1">Let's create a comprehensive plan for your new project</p>
+              <h2 className="text-2xl font-semibold text-gray-100">New Project Planning</h2>
+              <p className="text-gray-400 mt-1">Let's create a comprehensive plan for your new project</p>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-2 rounded-md hover:bg-gray-100"
+              className="text-gray-400 hover:text-gray-200 p-2 rounded-md hover:bg-gray-800"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -168,7 +168,7 @@ export default function NewProjectPlanning({ onPlanGenerate, onClose, isOpen, ap
                 <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold ${
                   index <= currentStep 
                     ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-200 text-gray-600'
+                    : 'bg-gray-800 text-gray-400 border border-gray-700'
                 }`}>
                   {index < currentStep ? (
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -179,13 +179,13 @@ export default function NewProjectPlanning({ onPlanGenerate, onClose, isOpen, ap
                   )}
                 </div>
                 <span className={`text-sm font-medium ${
-                  index <= currentStep ? 'text-gray-900' : 'text-gray-500'
+                  index <= currentStep ? 'text-gray-200' : 'text-gray-500'
                 }`}>
                   {step.title}
                 </span>
                 {index < PROJECT_STEPS.length - 1 && (
                   <div className={`w-8 h-0.5 ${
-                    index < currentStep ? 'bg-blue-600' : 'bg-gray-200'
+                    index < currentStep ? 'bg-blue-600' : 'bg-gray-800'
                   }`} />
                 )}
               </div>
@@ -194,7 +194,7 @@ export default function NewProjectPlanning({ onPlanGenerate, onClose, isOpen, ap
         </div>
 
         {/* Step Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-900">
           <ProjectStepContent
             step={PROJECT_STEPS[currentStep]}
             requirements={requirements}
@@ -309,8 +309,8 @@ function ProjectStepContent({
     <div className="max-w-2xl mx-auto">
       <div className="text-center mb-8">
         <div className="text-4xl mb-4">{step.icon}</div>
-        <h3 className="text-2xl font-semibold text-gray-900 mb-2">{step.title}</h3>
-        <p className="text-gray-600">{step.description}</p>
+        <h3 className="text-2xl font-semibold text-gray-100 mb-2">{step.title}</h3>
+        <p className="text-gray-400">{step.description}</p>
       </div>
 
       {renderStepContent()}
@@ -319,7 +319,7 @@ function ProjectStepContent({
         <button
           onClick={onBack}
           disabled={!onBack}
-          className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors"
+          className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 disabled:text-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
         >
           Back
         </button>
@@ -327,7 +327,7 @@ function ProjectStepContent({
         <button
           onClick={() => onComplete(stepData)}
           disabled={!canProceed() || isGenerating}
-          className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors disabled:cursor-not-allowed flex items-center space-x-2"
+          className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-900/60 rounded-lg transition-colors disabled:cursor-not-allowed flex items-center space-x-2"
         >
           {isGenerating ? (
             <>
@@ -367,15 +367,15 @@ function ProjectTypeSelection({ value, onChange }: { value?: string; onChange: (
           onClick={() => onChange(type.id)}
           className={`p-4 rounded-lg border-2 text-left transition-colors ${
             value === type.id
-              ? 'border-blue-500 bg-blue-50'
-              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              ? 'border-blue-500 bg-blue-900/20 text-gray-100'
+              : 'border-gray-800 hover:border-gray-700 hover:bg-gray-800 text-gray-300'
           }`}
         >
           <div className="flex items-center space-x-3 mb-2">
             <span className="text-2xl">{type.icon}</span>
-            <h4 className="font-semibold text-gray-900">{type.name}</h4>
+            <h4 className="font-semibold text-gray-100">{type.name}</h4>
           </div>
-          <p className="text-sm text-gray-600">{type.description}</p>
+          <p className="text-sm text-gray-400">{type.description}</p>
         </button>
       ))}
     </div>
@@ -413,7 +413,7 @@ function TechStackSelection({ value, onChange, projectType }: {
             className={`px-3 py-2 rounded-lg text-sm transition-colors ${
               selectedTech.includes(tech)
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
             }`}
           >
             {tech}
