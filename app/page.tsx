@@ -12,7 +12,6 @@ import { StorageManager, StoredCodebase } from "./lib/storageManager";
 import { CodebaseIndex, CodebaseParser } from "./lib/codebaseParser";
 import { OpenAIService, GeneratedPlan, PlanGenerationProgress } from "./lib/openAIService";
 import { NewProjectRequirements } from "./lib/clarifyingQuestions";
-import NewProjectPlanning from "./components/NewProjectPlanning";
 import PlanHistory from "./components/PlanHistory";
 import IntegrationExamples from "./components/IntegrationExamples";
 import PlanProgressTracker from "./components/PlanProgress";
@@ -943,16 +942,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
         </div>
       </div>
       
-      {/* New Project Planning Modal */}
-      {showNewProjectPlanning && (
-        <NewProjectPlanning
-          isOpen={showNewProjectPlanning}
-          onClose={() => setShowNewProjectPlanning(false)}
-          onPlanGenerate={handleNewProjectPlan}
-          apiKey={process.env.NEXT_PUBLIC_OPEN_AI_API || ''}
-        />
-      )}
-      
+     
       {/* Plan History Modal */}
       {showPlanHistory && (
         <PlanHistory

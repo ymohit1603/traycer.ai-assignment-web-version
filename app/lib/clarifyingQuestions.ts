@@ -54,14 +54,15 @@ export class ClarifyingQuestionsService {
 
     try {
       const response = await this.openAIService.callOpenAI(
-        { 
+        {
           codebaseOverview: codebase ? `Existing ${codebase.metadata.languages.join('/')} project with ${codebase.metadata.totalFiles} files` : 'New project',
           relevantFiles: [],
           projectStructure: codebase ? 'Existing codebase structure available' : 'No existing codebase',
           dependencies: codebase?.files.flatMap(f => f.dependencies) || [],
           languages: codebase?.metadata.languages || [],
           keyComponents: [],
-          userPrompt: userPrompt
+          userPrompt: userPrompt,
+          relevantFilesWithContent: []
         },
         2000
       );
@@ -241,7 +242,8 @@ export class ClarifyingQuestionsService {
           dependencies: [],
           languages: codebase?.metadata.languages || [],
           keyComponents: [],
-          userPrompt: refinementPrompt
+          userPrompt: refinementPrompt,
+          relevantFilesWithContent: []
         },
         1000
       );
