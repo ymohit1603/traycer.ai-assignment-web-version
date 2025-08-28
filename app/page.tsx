@@ -16,6 +16,9 @@ import PlanHistory from "./components/PlanHistory";
 import IntegrationExamples from "./components/IntegrationExamples";
 import PlanProgressTracker from "./components/PlanProgress";
 import { PlanHistoryService, SavedPlan, PlanComparison } from "./lib/planHistory";
+import SemanticSearch, { SemanticSearchResult } from "./components/SemanticSearch";
+import SemanticSearchResults from "./components/SemanticSearchResults";
+import GitHubImport, { GitHubRepository, SyncProgress } from "./components/GitHubImport";
 
 export interface UploadedFile {
   name: string;
@@ -201,6 +204,16 @@ export default function Home() {
   const [showIntegration, setShowIntegration] = useState(false);
   const [showProgressTracker, setShowProgressTracker] = useState(false);
   const [selectedSavedPlan, setSelectedSavedPlan] = useState<SavedPlan | null>(null);
+
+  // Semantic Search State
+  const [showSemanticSearch, setShowSemanticSearch] = useState(false);
+  const [semanticSearchResults, setSemanticSearchResults] = useState<SemanticSearchResult | null>(null);
+  const [searchMode, setSearchMode] = useState<'plan' | 'semantic'>('plan');
+
+  // GitHub Integration State
+  const [importedFromGitHub, setImportedFromGitHub] = useState(false);
+  const [importedRepository, setImportedRepository] = useState<GitHubRepository | null>(null);
+  const [githubSyncProgress, setGithubSyncProgress] = useState<SyncProgress | null>(null);
 
 
   const handleFilesUploaded = (files: UploadedFile[]) => {
@@ -749,6 +762,67 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
     toast.success(`Comparing plans: ${comparison.planA.name} vs ${comparison.planB.name}`);
   };
 
+  // Semantic Search Event Handlers
+  const handleSemanticSearchResults = (results: SemanticSearchResult) => {
+    console.log('🧠 Semantic search results received:', results);
+    setSemanticSearchResults(results);
+    toast.success(`Found ${results.searchResults.chunks.length} relevant code segments`);
+  };
+
+  const handleCloseSemanticResults = () => {
+    setSemanticSearchResults(null);
+  };
+
+  const toggleSearchMode = () => {
+    const newMode = searchMode === 'plan' ? 'semantic' : 'plan';
+    setSearchMode(newMode);
+    
+    // Clear current results when switching modes
+    if (newMode === 'semantic') {
+      setGeneratedPlan(null);
+      setPlanError(null);
+    } else {
+      setSemanticSearchResults(null);
+    }
+    
+    console.log(`🔄 Switched to ${newMode} mode`);
+    toast.success(`Switched to ${newMode === 'plan' ? 'Plan Generation' : 'Semantic Search'} mode`);
+  };
+
+  // GitHub Event Handlers
+  const handleRepositoryImported = async (repository: GitHubRepository, syncProgress: SyncProgress) => {
+    console.log('📁 Repository imported from GitHub:', repository.fullName);
+    
+    setImportedFromGitHub(true);
+    setImportedRepository(repository);
+    setGithubSyncProgress(syncProgress);
+    
+    // Create a synthetic stored codebase from the GitHub repository
+    if (syncProgress.result) {
+      const githubCodebase = {
+        metadata: {
+          id: `github_${repository.owner.login}_${repository.name}`,
+          name: repository.fullName,
+          totalFiles: syncProgress.result.filesCount,
+          totalSize: repository.size * 1024, // GitHub size is in KB
+          languages: repository.language ? [repository.language.toLowerCase()] : ['unknown'],
+          lastProcessed: Date.now(),
+          created: Date.now(),
+          source: 'github' as const,
+          repositoryUrl: repository.htmlUrl,
+          commit: syncProgress.result.commit,
+          merkleTreeHash: syncProgress.result.merkleTreeHash
+        },
+        files: [] // Files are already indexed in Pinecone, no need to store locally
+      };
+      
+      setStoredCodebase(githubCodebase as any);
+      setIsIndexed(true);
+      
+      toast.success(`🎉 Repository ${repository.name} imported and indexed successfully! ${syncProgress.result.filesCount} files processed.`);
+    }
+  };
+
   return (
     <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 p-4 sm:p-6 lg:p-8 ${(isGeneratingPlan || isRefiningPlan) ? 'body-with-ticker' : ''}`}>
       {/* Streaming Progress Ticker */}
@@ -762,17 +836,46 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
       
         {/* Main Content - Centered Prompt Area */}
         <div className="space-y-8">
-                    {/* Prompt Area */}
-          <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-8">
-                  <PromptArea
-                    value={prompt}
-                    onChange={setPrompt}
-              placeholder="Describe what you want to implement in your codebase..."
-            />
-       
-            
-            {/* Buttons */}
-            <div className="flex justify-center items-center space-x-4 mt-6">
+          {/* Mode Toggle */}
+          <div className="flex justify-center">
+            <div className="bg-gray-800 rounded-lg p-1 border border-gray-700">
+              <div className="flex">
+                <button
+                  onClick={() => searchMode === 'semantic' && toggleSearchMode()}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                    searchMode === 'plan'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  🔧 Plan Generation
+                </button>
+                <button
+                  onClick={() => searchMode === 'plan' && toggleSearchMode()}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                    searchMode === 'semantic'
+                      ? 'bg-green-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  🧠 Semantic Search
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {searchMode === 'plan' ? (
+            <>
+              {/* Plan Generation Mode */}
+              <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-8">
+                <PromptArea
+                  value={prompt}
+                  onChange={setPrompt}
+                  placeholder="Describe what you want to implement in your codebase..."
+                />
+         
+                {/* Buttons */}
+                <div className="flex justify-center items-center space-x-4 mt-6">
               {/* Plan History Button */}
                       <button
                 onClick={() => setShowPlanHistory(true)}
@@ -787,18 +890,18 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
               {/* Upload Codebase Button */}
               <button
                 onClick={isIndexed ? undefined : handleDirectFolderUpload}
-                disabled={isIndexing || uploadProgress.isUploading || isIndexed}
-                className={`${isIndexed 
+                disabled={isIndexing || uploadProgress.isUploading || isIndexed || importedFromGitHub}
+                className={`${isIndexed || importedFromGitHub
                   ? 'bg-green-600 cursor-default' 
                   : 'bg-gray-700 hover:bg-gray-600 disabled:bg-gray-600'
-                } disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center space-x-2 border ${isIndexed ? 'border-green-500' : 'border-gray-600'}`}
+                } disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center space-x-2 border ${isIndexed || importedFromGitHub ? 'border-green-500' : 'border-gray-600'}`}
               >
-                {isIndexed ? (
+                {isIndexed || importedFromGitHub ? (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <span>Codebase Uploaded</span>
+                    <span>{importedFromGitHub ? 'GitHub Imported' : 'Codebase Uploaded'}</span>
                   </>
                 ) : (
                   <>
@@ -808,7 +911,13 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                     <span>{isIndexing ? 'Indexing...' : 'Upload Codebase'}</span>
                   </>
                 )}
-                      </button>
+              </button>
+
+              {/* GitHub Import Button */}
+              <GitHubImport
+                onRepositoryImported={handleRepositoryImported}
+                disabled={isIndexing || uploadProgress.isUploading || isIndexed || importedFromGitHub}
+              />
                       
               {/* Send Button */}
                       <button
@@ -828,6 +937,26 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                       </button>
                   </div>
                 </div>
+            </>
+          ) : (
+            <>
+              {/* Semantic Search Mode */}
+              <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-8">
+                <div className="mb-6 text-center">
+                  <h2 className="text-xl font-semibold text-gray-200 mb-2">🧠 Semantic Codebase Search</h2>
+                  <p className="text-sm text-gray-400">
+                    Ask natural language questions about your codebase and get intelligent, context-aware answers
+                  </p>
+                </div>
+                
+                <SemanticSearch
+                  codebaseId={storedCodebase?.metadata.id || ''}
+                  onResultsFound={handleSemanticSearchResults}
+                  className="w-full"
+                />
+              </div>
+            </>
+          )}
 
                     {/* Upload Progress */}
           {uploadProgress.isUploading && (
@@ -886,20 +1015,64 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
           {/* Indexing Success Message */}
           {isIndexed && storedCodebase && (
             <div className="bg-gray-800 rounded-xl shadow-2xl border border-green-500 p-6">
-              <div className="flex items-center space-x-2 text-green-400">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="font-medium">Codebase Indexed</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-green-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="font-medium">
+                    {importedFromGitHub ? 'GitHub Repository Indexed' : 'Codebase Indexed'}
+                  </span>
+                </div>
+                
+                {importedFromGitHub && importedRepository && (
+                  <div className="flex items-center space-x-2">
+                    <a
+                      href={importedRepository.htmlUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 text-sm flex items-center space-x-1"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                      </svg>
+                      <span>View on GitHub</span>
+                    </a>
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-gray-300 mt-1">
-                {storedCodebase.metadata.totalFiles} files processed • {storedCodebase.metadata.languages.join(', ')}
-              </p>
+              
+              <div className="mt-2">
+                {importedFromGitHub && importedRepository ? (
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-300">
+                      {importedRepository.fullName} • {storedCodebase.metadata.totalFiles} files processed
+                    </p>
+                    <div className="flex items-center space-x-4 text-xs text-gray-400">
+                      <span>{storedCodebase.metadata.languages.join(', ')}</span>
+                      {importedRepository.language && (
+                        <span className="px-2 py-1 bg-blue-600 bg-opacity-30 text-blue-300 rounded">
+                          {importedRepository.language}
+                        </span>
+                      )}
+                      {importedRepository.private && (
+                        <span className="px-2 py-1 bg-yellow-600 bg-opacity-30 text-yellow-300 rounded">
+                          Private
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-300 mt-1">
+                    {storedCodebase.metadata.totalFiles} files processed • {storedCodebase.metadata.languages.join(', ')}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
           {/* Plan Display */}
-          {(generatedPlan || isGeneratingPlan || planError) && (
+          {(generatedPlan || isGeneratingPlan || planError) && searchMode === 'plan' && (
             <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-6">
               <div className="flex justify-between items-start mb-4">
                 <h3 className="text-lg font-semibold text-gray-100">Implementation Plan</h3>
@@ -938,6 +1111,14 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                 progress={planProgress}
               />
             </div>
+          )}
+
+          {/* Semantic Search Results */}
+          {semanticSearchResults && searchMode === 'semantic' && (
+            <SemanticSearchResults
+              results={semanticSearchResults}
+              onClose={handleCloseSemanticResults}
+            />
           )}
         </div>
       </div>
