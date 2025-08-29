@@ -156,15 +156,83 @@ export class SimilaritySearchService {
     
     try {
       console.log('🧠 Generating embeddings for all chunks...');
-      embeddingBatch = await this.embeddingService.generateEmbeddings(allChunks);
+      // For safety, if we have many chunks, process in smaller batches
+      if (allChunks.length > 50) {
+        console.log(`⚠️ Large number of chunks (${allChunks.length}), processing in batches...`);
+        const batchSize = 20;
+        const batches = [];
+        
+        // Split into smaller batches
+        for (let i = 0; i < allChunks.length; i += batchSize) {
+          batches.push(allChunks.slice(i, i + batchSize));
+        }
+        
+        // Process each batch
+        let allEmbeddings = [];
+        let totalTokens = 0;
+        
+        for (let i = 0; i < batches.length; i++) {
+          console.log(`📊 Processing batch ${i+1}/${batches.length} (${batches[i].length} chunks)`);
+          try {
+            const batchResult = await this.embeddingService.generateEmbeddings(batches[i]);
+            allEmbeddings.push(...batchResult.embeddings);
+            totalTokens += batchResult.totalTokens;
+            
+            onProgress?.({ 
+              phase: 'embedding', 
+              progress: 20 + Math.floor((i+1) / batches.length * 60),
+              message: `Generated embeddings for batch ${i+1}/${batches.length}`,
+              chunksProcessed: Math.min(allChunks.length, (i+1) * batchSize),
+              totalChunks: allChunks.length,
+              errors
+            });
+          } catch (error) {
+            console.error(`❌ Error in batch ${i+1}:`, error);
+            errors.push(`Batch ${i+1} error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            // Continue with next batch instead of failing completely
+          }
+        }
+        
+        embeddingBatch = {
+          chunks: allChunks,
+          embeddings: allEmbeddings,
+          totalTokens,
+          processingTime: 0 // Not important here
+        };
+      } else {
+        // Regular processing for smaller number of chunks
+        embeddingBatch = await this.embeddingService.generateEmbeddings(allChunks);
+      }
       
       console.log(`✅ Generated ${embeddingBatch.embeddings.length} embeddings`);
       console.log(`📊 Token usage: ${embeddingBatch.totalTokens} tokens`);
+      
+      // Check if we have at least some embeddings
+      if (embeddingBatch.embeddings.length === 0) {
+        throw new Error('Failed to generate any valid embeddings');
+      }
+      
+      // Log success rate
+      const successRate = (embeddingBatch.embeddings.length / allChunks.length) * 100;
+      console.log(`📊 Embedding generation success rate: ${successRate.toFixed(1)}% (${embeddingBatch.embeddings.length}/${allChunks.length})`);
+      
+      // If success rate is too low, warn but continue
+      if (successRate < 50) {
+        console.warn(`⚠️ Low embedding success rate: ${successRate.toFixed(1)}%. Indexing may be incomplete.`);
+        errors.push(`Low embedding success rate: ${successRate.toFixed(1)}%`);
+      }
+      
     } catch (error) {
       const errorMsg = `Error generating embeddings: ${error instanceof Error ? error.message : 'Unknown error'}`;
       console.error('❌', errorMsg);
       errors.push(errorMsg);
-      throw new Error(errorMsg);
+      
+      // Don't completely fail if we have partial results
+      if (embeddingBatch && embeddingBatch.embeddings && embeddingBatch.embeddings.length > 0) {
+        console.log(`🔄 Continuing with partial embeddings: ${embeddingBatch.embeddings.length} out of ${allChunks.length}`);
+      } else {
+        throw new Error(errorMsg);
+      }
     }
 
     // Phase 3: Store in Pinecone

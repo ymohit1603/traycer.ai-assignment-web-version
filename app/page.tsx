@@ -427,9 +427,26 @@ export default function Home() {
       await generatePlanFromPrompt(prompt, indexedCodebase);
     } catch (error) {
       console.error('❌ Error during codebase indexing or plan generation:', error);
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to process codebase and generate plan';
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          errorMessage = 'API configuration error. Please check your API keys.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Network error. Please check your internet connection.';
+        } else if (error.message.includes('rate limit')) {
+          errorMessage = 'API rate limit exceeded. Please try again later.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       toast.dismiss(loadingToast);
-      toast.error(error instanceof Error ? error.message : 'Failed to process codebase and generate plan');
-      setPlanError(error instanceof Error ? error.message : 'Failed to process codebase and generate plan');
+      toast.error(errorMessage);
+      setPlanError(errorMessage);
       setIsGeneratingPlan(false);
       setIsIndexing(false);
     }
@@ -487,9 +504,28 @@ export default function Home() {
       
     } catch (error) {
       console.error('❌ Error generating plan:', error);
+
+      // Enhanced error handling with specific messages
+      let errorMessage = 'Failed to generate plan';
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          errorMessage = 'OpenAI API key not configured. Please check your environment variables.';
+        } else if (error.message.includes('quota') || error.message.includes('billing')) {
+          errorMessage = 'OpenAI API quota exceeded. Please check your billing settings.';
+        } else if (error.message.includes('rate limit')) {
+          errorMessage = 'Too many requests. Please wait a moment and try again.';
+        } else if (error.message.includes('model') || error.message.includes('not found')) {
+          errorMessage = 'AI model not available. Please try again later.';
+        } else if (error.message.includes('network') || error.message.includes('ECONNREFUSED')) {
+          errorMessage = 'Network connection failed. Please check your internet connection.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       toast.dismiss();
-      toast.error(error instanceof Error ? error.message : 'Failed to generate plan');
-      setPlanError(error instanceof Error ? error.message : 'Failed to generate plan');
+      toast.error(errorMessage);
+      setPlanError(errorMessage);
     } finally {
       setIsGeneratingPlan(false);
       setPlanProgress(null);

@@ -137,20 +137,23 @@ export async function POST(request: NextRequest) {
               dependencies: []
             }));
 
-            // Index the repository
+            // Index the repository with detailed progress
+            console.log(`🔍 Starting indexing for ${codebaseFiles.length} files...`);
             await searchService.indexCodebase(
               codebaseFiles,
               codebaseId || `github_${owner}_${repo}`,
               (indexProgress) => {
+                console.log(`📊 Indexing progress: ${indexProgress.progress}% - ${indexProgress.message}`);
                 syncProgress.set(progressId, {
                   ...syncProgress.get(progressId),
                   phase: 'indexing',
-                  progress: 70 + (indexProgress.progress * 0.15),
-                  message: `Indexing: ${indexProgress.message}`,
-                  currentFile: indexProgress.currentFile
+                  progress: 70 + (indexProgress.progress * 0.15), // 70-85% for indexing
+                  message: `🔍 ${indexProgress.message}`,
+                  currentFile: indexProgress.currentFile || 'Processing files...'
                 });
               }
             );
+            console.log('✅ Indexing completed successfully');
 
             // Set up webhook for automatic updates
             let webhookInfo = null;
@@ -159,16 +162,26 @@ export async function POST(request: NextRequest) {
                 ...syncProgress.get(progressId),
                 phase: 'indexing',
                 progress: 85,
-                message: 'Setting up webhook for auto-updates...'
+                message: '🔗 Setting up webhook for auto-updates...'
               });
 
+              console.log('🔧 Setting up webhook...');
               const webhookUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/github/webhook`;
               webhookInfo = await githubService.setupWebhook(owner, repo, webhookUrl);
-              
-              console.log(`🔗 Webhook setup successful: ${webhookInfo.webhookId}`);
+
+              console.log(`✅ Webhook setup successful: ${webhookInfo.webhookId}`);
+              syncProgress.set(progressId, {
+                ...syncProgress.get(progressId),
+                progress: 90,
+                message: '🔗 Webhook configured successfully'
+              });
             } catch (webhookError) {
               console.warn(`⚠️ Webhook setup failed (continuing without webhook):`, webhookError);
-              // Continue without webhook - manual sync will still work
+              syncProgress.set(progressId, {
+                ...syncProgress.get(progressId),
+                progress: 90,
+                message: '⚠️ Webhook setup skipped (manual sync available)'
+              });
             }
 
             // Store repository sync data
@@ -216,12 +229,37 @@ export async function POST(request: NextRequest) {
 
           } catch (indexError) {
             console.error('❌ Error during indexing:', indexError);
+            
+            // Provide more specific error information
+            let errorMessage = 'Indexing failed';
+            if (indexError instanceof Error) {
+              if (indexError.message.includes('embedding')) {
+                errorMessage = 'Vector embedding generation failed - this may be due to API issues';
+              } else if (indexError.message.includes('API')) {
+                errorMessage = 'API communication error during indexing';
+              } else {
+                errorMessage = indexError.message;
+              }
+            }
+            
             syncProgress.set(progressId, {
-              phase: 'error',
+              phase: 'complete', // Mark as complete since sync worked
               progress: 100,
-              message: 'Sync completed but indexing failed',
-              errors: [indexError instanceof Error ? indexError.message : 'Indexing failed']
+              message: 'Repository synced successfully (indexing partially failed)',
+              filesProcessed: syncResult.files.length,
+              totalFiles: syncResult.files.length,
+              errors: [`Indexing warning: ${errorMessage}`],
+              result: {
+                syncId: syncResult.syncId,
+                commit: syncResult.commit,
+                filesCount: syncResult.files.length,
+                merkleTreeHash: syncResult.merkleTree.rootHash,
+                webhookId: webhookInfo?.webhookId,
+                webhookSetup: !!webhookInfo
+              }
             });
+            
+            console.log(`⚠️ Repository sync completed with indexing warnings: ${progressId}`);
           }
         }).catch((error) => {
           console.error('❌ Repository sync failed:', error);

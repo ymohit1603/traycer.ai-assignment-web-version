@@ -94,7 +94,11 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
 
   // Check if codebase is indexed on mount
   useEffect(() => {
-    checkIndexStatus();
+    if (codebaseId) {
+      checkIndexStatus();
+    } else {
+      setIndexStatus('not-indexed');
+    }
   }, [codebaseId]);
 
   const checkIndexStatus = async () => {

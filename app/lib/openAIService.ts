@@ -56,6 +56,10 @@ export interface PlanGenerationProgress {
   currentFile?: string;
   progress: number; // 0-100
   message: string;
+  toolCall?: {
+    name: string;
+    args: Record<string, any>;
+  };
 }
 
 export type ProgressCallback = (progress: PlanGenerationProgress) => void;
@@ -152,7 +156,7 @@ export class OpenAIService {
         message: '🎯 AI is crafting focused implementation strategy...',
       });
       
-      const planContent = await this.callOpenAI(context, maxTokens);
+      const planContent = await this.callOpenAI(context, maxTokens, onProgress);
       
       onProgress?.({
         step: 'generating',
@@ -243,37 +247,59 @@ export class OpenAIService {
         const file = searchEngine.getFileById(result.fileId);
         
         if (file && file.content) {
-          // Reading file
+          // Simulate tool call: read file
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
             progress: 35 + (i * 8),
-            message: `📄 Reading ${file.filePath}...`,
+            message: `Reading file contents`,
+            toolCall: {
+              name: 'read_file',
+              args: { path: file.filePath }
+            }
           });
           
-          // Show detailed reasoning steps like Cursor AI
-          await new Promise(resolve => setTimeout(resolve, 300));
+          // Allow UI to render the tool call
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Simulate code understanding
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
             progress: 37 + (i * 8),
-            message: `🔍 Analyzing code structure in ${file.filePath}...`,
+            message: `Analyzing code structure...`,
+            toolCall: {
+              name: 'analyze_code',
+              args: { path: file.filePath }
+            }
           });
           
           await new Promise(resolve => setTimeout(resolve, 400));
+          
+          // Simulate dependency analysis
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
             progress: 39 + (i * 8),
-            message: `🧠 Understanding patterns and dependencies...`,
+            message: `Extracting imports and exports...`,
+            toolCall: {
+              name: 'extract_dependencies',
+              args: { path: file.filePath }
+            }
           });
           
           await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Simulate pattern recognition
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
             progress: 41 + (i * 8),
-            message: `💡 Identifying implementation opportunities...`,
+            message: `Identifying implementation patterns...`,
+            toolCall: {
+              name: 'identify_patterns',
+              args: { path: file.filePath }
+            }
           });
           
           // Include file content (truncated if too long)
@@ -287,13 +313,13 @@ export class OpenAIService {
             relevance: result.relevanceScore
           });
           
-          // Final reasoning step
+          // Final analysis completion
           await new Promise(resolve => setTimeout(resolve, 200));
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
             progress: 43 + (i * 8),
-            message: `✅ File analysis complete`,
+            message: `Analysis complete`,
           });
         }
       }
@@ -360,47 +386,151 @@ export class OpenAIService {
     };
   }
 
-  async callOpenAI(context: ContextData, maxTokens: number): Promise<string> {
+  async callOpenAI(context: ContextData, maxTokens: number, onProgress?: ProgressCallback): Promise<string> {
     const systemPrompt = this.buildSystemPrompt();
     const userPrompt = this.buildUserPrompt(context);
 
-    console.log('📡 Making OpenAI API call...', {
-      model: "openai/gpt-oss-20b:free",
+    console.log('📡 Making OpenAI API call with streaming...', {
+      model: "openai/gpt-4-turbo-preview",
       systemPromptLength: systemPrompt.length,
       userPromptLength: userPrompt.length,
       maxTokens,
       temperature: 0.7
     });
 
-    const completion = await this.openai.chat.completions.create({
-      model: "openai/gpt-oss-20b:free",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: maxTokens,
-      temperature: 0.7,
-      top_p: 0.9,
-    });
+    try {
+      // Use streaming for real-time updates
+      const stream = await this.openai.chat.completions.create({
+        model: "openai/gpt-4-turbo-preview",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.7,
+        top_p: 0.9,
+        stream: true, // Enable streaming
+      });
 
-    console.log('📨 OpenAI API response received:', {
-      choices: completion.choices.length,
-      usage: completion.usage,
-      model: completion.model
-    });
+      let fullResponse = '';
+      let chunkCount = 0;
 
-    const response = completion.choices[0]?.message?.content;
-    if (!response) {
-      console.error('❌ No response content from OpenRouter');
-      throw new Error('No response received from OpenRouter');
+      // Process the stream
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta;
+        if (delta?.content) {
+          fullResponse += delta.content;
+          chunkCount++;
+
+          // Provide real-time progress updates based on content
+          if (chunkCount % 10 === 0) { // Update every 10 chunks
+            const progress = this.extractProgressFromContent(fullResponse);
+            onProgress?.({
+              step: 'generating',
+              progress: Math.min(80 + (chunkCount * 0.5), 95), // Scale from 80-95%
+              message: progress.message,
+              currentFile: progress.currentFile,
+              toolCall: progress.toolCall
+            });
+          }
+        }
+      }
+
+      console.log('✅ Streaming response completed:', {
+        responseLength: fullResponse.length,
+        chunksProcessed: chunkCount,
+        firstWords: fullResponse.substring(0, 100) + '...'
+      });
+
+      if (!fullResponse.trim()) {
+        throw new Error('Empty response received from OpenAI');
+      }
+
+      return fullResponse;
+
+    } catch (error) {
+      console.error('❌ OpenAI streaming failed, falling back to non-streaming:', error);
+
+      // Fallback to non-streaming if streaming fails
+      const completion = await this.openai.chat.completions.create({
+        model: "openai/gpt-4-turbo-preview",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.7,
+        top_p: 0.9,
+      });
+
+      const response = completion.choices[0]?.message?.content;
+      if (!response) {
+        throw new Error('No response received from OpenAI');
+      }
+
+      return response;
+    }
+  }
+
+  private extractProgressFromContent(content: string): { message: string; currentFile?: string; toolCall?: {name: string, args: Record<string, any>} } {
+    // Extract meaningful progress information from the AI's response
+    if (content.includes('**Observations**') && !content.includes('**Approach**')) {
+      return { 
+        message: '🤔 AI is analyzing codebase observations...',
+        toolCall: {
+          name: 'analyze_codebase',
+          args: { action: 'observations' }
+        }
+      };
     }
 
-    console.log('✅ Response extracted successfully:', {
-      responseLength: response.length,
-      firstWords: response.substring(0, 100) + '...'
-    });
+    if (content.includes('**Approach**') && !content.includes('**Implementation Files**')) {
+      return { 
+        message: '🎯 AI is developing implementation approach...',
+        toolCall: {
+          name: 'plan_approach',
+          args: { action: 'strategy' }
+        }
+      };
+    }
 
-    return response;
+    if (content.includes('**Implementation Files**')) {
+      const lines = content.split('\n');
+      const filesSectionIndex = lines.findIndex(line => line.includes('**Implementation Files**'));
+
+      if (filesSectionIndex !== -1) {
+        // Look for the current file being described
+        for (let i = filesSectionIndex + 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line && !line.startsWith('**') && line.includes('.') && (line.endsWith('.ts') || line.endsWith('.tsx') || line.endsWith('.js') || line.endsWith('.jsx') || line.endsWith('.py'))) {
+            return {
+              message: `Planning implementation for`,
+              currentFile: line,
+              toolCall: {
+                name: 'file_plan',
+                args: { path: line }
+              }
+            };
+          }
+        }
+      }
+
+      return { 
+        message: '📋 AI is organizing implementation files...',
+        toolCall: {
+          name: 'organize_files',
+          args: { action: 'structure' }
+        }
+      };
+    }
+
+    return { 
+      message: '🤖 AI is generating implementation plan...',
+      toolCall: {
+        name: 'generate_plan',
+        args: { type: 'comprehensive' }
+      }
+    };
   }
 
   private buildSystemPrompt(): string {

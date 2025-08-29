@@ -20,7 +20,7 @@ export interface EmbeddingBatch {
 
 export class VectorEmbeddingService {
   private openai: OpenAI;
-  private model: string = 'text-embedding-3-small';
+  private model: string = 'text-embedding-ada-002';
   private maxBatchSize: number = 100; // OpenAI batch limit
   private maxTokensPerChunk: number = 8000; // Model context limit
 
@@ -95,28 +95,147 @@ export class VectorEmbeddingService {
    */
   async generateSingleEmbedding(chunk: CodeChunk): Promise<EmbeddingResult> {
     const text = this.prepareTextForEmbedding(chunk);
-    
-    try {
-      const response = await this.openai.embeddings.create({
-        model: this.model,
-        input: text,
-        encoding_format: 'float'
-      });
 
-      const embedding = response.data[0].embedding;
-      const usage = response.usage;
+    try {
+      console.log(`🔢 Generating embedding for chunk: ${chunk.id}`);
+      let response;
+      try {
+        response = await this.openai.embeddings.create({
+          model: this.model,
+          input: text,
+          encoding_format: 'float'
+        });
+      } catch (error) {
+        console.error('Error from OpenAI API:', error);
+        throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+      
+      if (!response) {
+        throw new Error('Received null or undefined response from OpenAI API');
+      }
+
+      // DEBUG: OpenRouter response structure (safe logging)
+      console.log('🔍 Response analysis:');
+      console.log('- Type:', typeof response);
+      console.log('- Keys:', Object.keys(response || {}));
+      console.log('- Has data array:', Array.isArray(response?.data));
+      console.log('- Data length:', response?.data?.length);
+      console.log('- Object field:', response?.object);
+      console.log('- Model field:', response?.model);
+      
+      if (response?.data?.[0]) {
+        const firstItem = response.data[0];
+        console.log('- First item type:', firstItem?.object);
+        console.log('- Has embedding:', !!firstItem?.embedding);
+        console.log('- Embedding type:', typeof firstItem?.embedding);
+        console.log('- Embedding length:', firstItem?.embedding?.length);
+      }
+
+      // Handle different response formats
+      // OpenRouter and OpenAI might have different response structures
+      let embedding;
+      
+      // Parse OpenRouter response format
+      if (response?.data && Array.isArray(response.data) && response.data.length > 0) {
+        const firstItem = response.data[0];
+        
+        // OpenRouter standard format: { object: "embedding", embedding: [...], index: 0 }
+        if (firstItem?.embedding && Array.isArray(firstItem.embedding)) {
+          embedding = firstItem.embedding;
+          console.log('✅ Found embedding in OpenRouter data[0].embedding');
+        }
+        // Fallback: check if data[0] is directly an array (unlikely but possible)
+        else if (Array.isArray(firstItem) && firstItem.length > 100) {
+          embedding = firstItem;
+          console.log('✅ Found embedding as direct array in data[0]');
+        }
+      } 
+      
+      if (!embedding && response.embeddings && Array.isArray(response.embeddings) && response.embeddings.length > 0) {
+        // Alternative format: { embeddings: [[...]] }
+        const embeddingData = response.embeddings[0];
+        if (Array.isArray(embeddingData)) {
+          embedding = embeddingData;
+          console.log('✅ Found embedding in embeddings[0] array format');
+        } else if (embeddingData && embeddingData.embedding) {
+          embedding = embeddingData.embedding;
+          console.log('✅ Found embedding in embeddings[0].embedding format');
+        }
+      } 
+      
+      if (!embedding && Array.isArray(response.embedding)) {
+        // Direct array format: { embedding: [...] }
+        embedding = response.embedding;
+        // Found embedding in direct format
+      } 
+      
+      if (!embedding && response.choices && Array.isArray(response.choices) && response.choices.length > 0) {
+        // OpenRouter might use choices format: { choices: [{ embedding: [...] }] }
+        const firstChoice = response.choices[0];
+        if (firstChoice && firstChoice.embedding) {
+          embedding = firstChoice.embedding;
+          // Found embedding in choices format
+        }
+      }
+      
+      if (!embedding && response.result && Array.isArray(response.result)) {
+        // Another possible format: { result: [...] }
+        embedding = response.result;
+        // Found embedding in result format
+      }
+      
+      if (!embedding) {
+        console.error('❌ Could not find embedding in expected locations');
+        
+        // Try to find any array-like structure that could be an embedding
+        for (const [key, value] of Object.entries(response)) {
+          if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') {
+            // Found embedding at alternate key
+            embedding = value;
+            break;
+          }
+          if (Array.isArray(value) && value.length > 0 && Array.isArray(value[0]) && typeof value[0][0] === 'number') {
+            // Found embedding at nested key
+            embedding = value[0];
+            break;
+          }
+        }
+      }
+      
+      if (!embedding) {
+        console.error('❌ No valid embedding found in API response');
+        throw new Error('Invalid API response: could not find embedding vector');
+      }
+
+      // Validate embedding
+      if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+        console.error('❌ Embedding validation failed - Type:', typeof embedding, 'Length:', embedding?.length);
+        throw new Error(`Invalid embedding: not an array or empty array. Type: ${typeof embedding}, Length: ${embedding?.length}`);
+      }
+      
+      // Additional validation - check if it looks like a real embedding
+      if (embedding.length < 100) {
+        console.warn('⚠️ Embedding seems unusually short:', embedding.length, 'dimensions');
+      }
+      
+      if (!embedding.every(val => typeof val === 'number')) {
+        console.error('❌ Embedding contains non-numeric values');
+        throw new Error('Invalid embedding: contains non-numeric values');
+      }
+
+      // Successfully generated embedding
 
       return {
         chunkId: chunk.id,
         embedding,
         model: this.model,
         usage: {
-          promptTokens: usage.prompt_tokens,
-          totalTokens: usage.total_tokens
+          promptTokens: response.usage?.prompt_tokens || 0,
+          totalTokens: response.usage?.total_tokens || 0
         }
       };
     } catch (error) {
-      console.error(`❌ Error generating embedding for chunk ${chunk.id}:`, error);
+      console.error(`❌ Error generating embedding for chunk ${chunk.id}:`, error.message || error);
       throw error;
     }
   }
@@ -126,47 +245,98 @@ export class VectorEmbeddingService {
    */
   private async processBatch(chunks: CodeChunk[]): Promise<{embeddings: EmbeddingResult[], totalTokens: number}> {
     const texts = chunks.map(chunk => this.prepareTextForEmbedding(chunk));
-    
+
     try {
+      console.log(`🔢 Processing batch of ${chunks.length} chunks`);
       const response = await this.openai.embeddings.create({
         model: this.model,
         input: texts,
         encoding_format: 'float'
       });
 
-      const embeddings: EmbeddingResult[] = response.data.map((item, index) => ({
-        chunkId: chunks[index].id,
-        embedding: item.embedding,
-        model: this.model,
-        usage: {
-          promptTokens: Math.floor(response.usage.prompt_tokens / chunks.length),
-          totalTokens: Math.floor(response.usage.total_tokens / chunks.length)
+      // Validate response structure
+      if (!response.data || !Array.isArray(response.data)) {
+        throw new Error(`Invalid batch API response: missing or invalid data array`);
+      }
+
+      if (response.data.length !== chunks.length) {
+        console.warn(`⚠️ Response data length (${response.data.length}) doesn't match chunks length (${chunks.length})`);
+      }
+
+      const embeddings: EmbeddingResult[] = [];
+      let totalTokens = 0;
+
+      for (let i = 0; i < Math.min(response.data.length, chunks.length); i++) {
+        const item = response.data[i];
+        const chunk = chunks[i];
+
+        if (!item || !item.embedding) {
+          console.error(`❌ Invalid response item at index ${i}:`, item);
+          continue;
         }
-      }));
+
+        // Validate embedding
+        if (!Array.isArray(item.embedding) || item.embedding.length === 0) {
+          console.error(`❌ Invalid embedding at index ${i}: not an array or empty`);
+          continue;
+        }
+
+        const avgPromptTokens = Math.floor((response.usage?.prompt_tokens || 0) / chunks.length);
+        const avgTotalTokens = Math.floor((response.usage?.total_tokens || 0) / chunks.length);
+
+        embeddings.push({
+          chunkId: chunk.id,
+          embedding: item.embedding,
+          model: this.model,
+          usage: {
+            promptTokens: avgPromptTokens,
+            totalTokens: avgTotalTokens
+          }
+        });
+
+        totalTokens += avgTotalTokens;
+      }
+
+      console.log(`✅ Batch processed successfully: ${embeddings.length}/${chunks.length} embeddings generated`);
 
       return {
         embeddings,
-        totalTokens: response.usage.total_tokens
+        totalTokens: response.usage?.total_tokens || totalTokens
       };
     } catch (error) {
-      console.error('❌ Batch processing failed:', error);
-      
+      console.error('❌ Batch processing failed:', error.message || error);
+
       // Fallback: process chunks individually
       console.log('⚠️ Falling back to individual processing...');
       const embeddings: EmbeddingResult[] = [];
       let totalTokens = 0;
+      let failedChunks = 0;
 
       for (const chunk of chunks) {
         try {
           const result = await this.generateSingleEmbedding(chunk);
           embeddings.push(result);
           totalTokens += result.usage.totalTokens;
-          
+              // Individual processing success
+
           // Small delay between individual requests
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 100));
         } catch (chunkError) {
+          failedChunks++;
           console.error(`❌ Failed to process chunk ${chunk.id}:`, chunkError);
+          
+          // Log chunk details for debugging (concise)
+          console.log(`❌ Failed chunk: ${chunk.id} (${chunk.type}, ${chunk.content?.length || 0} chars)`);
+          
+          // Continue processing other chunks
         }
+      }
+      
+      console.log(`📊 Individual processing complete: ${embeddings.length} success, ${failedChunks} failed`);
+      
+      // If we have at least some embeddings, continue
+      if (embeddings.length === 0) {
+        throw new Error('All chunks failed to generate embeddings');
       }
 
       return { embeddings, totalTokens };
@@ -304,15 +474,35 @@ export class VectorEmbeddingService {
    */
   async generateQueryEmbedding(query: string): Promise<number[]> {
     try {
+      console.log(`🔢 Generating query embedding for: "${query.substring(0, 50)}..."`);
       const response = await this.openai.embeddings.create({
         model: this.model,
         input: query,
         encoding_format: 'float'
       });
 
-      return response.data[0].embedding;
+      // Validate response structure
+      if (!response.data || !Array.isArray(response.data) || response.data.length === 0) {
+        throw new Error(`Invalid query API response: no data array or empty data array`);
+      }
+
+      const firstItem = response.data[0];
+      if (!firstItem || !firstItem.embedding) {
+        throw new Error(`Invalid query API response: missing embedding in response`);
+      }
+
+      const embedding = firstItem.embedding;
+
+      // Validate embedding
+      if (!Array.isArray(embedding) || embedding.length === 0) {
+        throw new Error(`Invalid query embedding: not an array or empty array`);
+      }
+
+      console.log(`✅ Query embedding generated successfully, dimension: ${embedding.length}`);
+      return embedding;
     } catch (error) {
       console.error('❌ Error generating query embedding:', error);
+      console.error('Query length:', query.length);
       throw error;
     }
   }

@@ -219,13 +219,18 @@ export async function GET(request: NextRequest) {
 
       case 'status': {
         if (!codebaseId) {
-          return NextResponse.json(
-            { error: 'CodebaseId is required' },
-            { status: 400 }
-          );
+          // If no codebaseId provided, return a graceful response instead of an error
+          return NextResponse.json({
+            success: true,
+            codebaseId: '',
+            indexed: false,
+            message: 'No codebase ID provided',
+            timestamp: new Date().toISOString()
+          });
         }
 
         const searchService = initializeSearchService();
+        await searchService.initialize();
         
         // Check if codebase is indexed by checking Pinecone
         try {
@@ -233,16 +238,12 @@ export async function GET(request: NextRequest) {
             topK: 1
           });
 
-          const isIndexed = chunks.length > 0;
+          const isIndexed = chunks && chunks.length > 0;
           
           // Get more detailed stats if indexed
-          let stats = null;
+          let stats = { totalVectors: chunks.length };
           if (isIndexed) {
-            try {
-              stats = await pineconeService.getIndexStats();
-            } catch (error) {
-              console.warn('⚠️ Could not get index stats:', error);
-            }
+            console.log(`Found ${chunks.length} chunks for codebase ${codebaseId}`);
           }
 
           return NextResponse.json({

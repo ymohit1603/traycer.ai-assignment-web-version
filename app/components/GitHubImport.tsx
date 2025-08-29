@@ -201,14 +201,20 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
       const progressId = data.progressId;
       console.log(`📊 Sync started, tracking progress: ${progressId}`);
 
-      // Poll for progress
+      // Poll for progress with improved error handling
+      let pollAttempts = 0;
+      const maxPollAttempts = 600; // 10 minutes with 1s intervals
+
       const pollInterval = setInterval(async () => {
         try {
+          pollAttempts++;
+
           const progressResponse = await fetch(`/api/github?action=progress&progressId=${progressId}`);
           const progressData = await progressResponse.json();
-          
+
           if (progressData.success && progressData.progress) {
             const progress = progressData.progress;
+            console.log(`📊 Progress update: ${progress.phase} - ${progress.progress}% - ${progress.message}`);
             setSyncProgress(progress);
 
             if (progress.phase === 'complete') {
@@ -217,14 +223,30 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
               setShowRepoList(false);
               onRepositoryImported(repository, progress);
               toast.success(`Repository ${repository.name} imported successfully!`);
+              console.log('✅ GitHub sync completed successfully');
             } else if (progress.phase === 'error') {
               clearInterval(pollInterval);
               setIsSyncing(false);
-              toast.error(`Sync failed: ${progress.errors.join(', ')}`);
+              const errorMsg = progress.errors?.join(', ') || 'Unknown error occurred';
+              toast.error(`Sync failed: ${errorMsg}`);
+              console.error('❌ GitHub sync failed:', progress.errors);
             }
+          } else if (pollAttempts >= maxPollAttempts) {
+            // Timeout after 10 minutes
+            clearInterval(pollInterval);
+            setIsSyncing(false);
+            toast.error('Sync timed out. Please try again.');
+            console.error('❌ GitHub sync timed out after 10 minutes');
           }
         } catch (error) {
           console.error('Error polling progress:', error);
+
+          // Continue polling even if there's a network error
+          if (pollAttempts >= maxPollAttempts) {
+            clearInterval(pollInterval);
+            setIsSyncing(false);
+            toast.error('Network error during sync. Please try again.');
+          }
         }
       }, 1000);
 
