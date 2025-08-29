@@ -874,7 +874,13 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
 
   async generateNewProjectPlan(
     projectPrompt: string,
-    requirements: any,
+    requirements: {
+      projectType: string;
+      techStack: string[];
+      database?: string;
+      authentication?: string;
+      deployment?: string;
+    },
     maxTokens: number = 4000,
     onProgress?: ProgressCallback
   ): Promise<GeneratedPlan> {
@@ -932,13 +938,19 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
       });
       
       return structuredPlan;
-    } catch (error) {
-      console.error('❌ Error generating new project plan:', error);
-      throw new Error(`Failed to generate new project plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch {
+      console.error('❌ Error generating new project plan');
+      throw new Error('Failed to generate new project plan: Unknown error');
     }
   }
 
-  private prepareNewProjectContext(projectPrompt: string, requirements: any): ContextData {
+  private prepareNewProjectContext(projectPrompt: string, requirements: {
+    projectType: string;
+    techStack: string[];
+    database?: string;
+    authentication?: string;
+    deployment?: string;
+  }): ContextData {
     // Create a project structure overview based on requirements
     const projectStructure = this.generateNewProjectStructure(requirements);
     
@@ -969,7 +981,13 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
     };
   }
 
-  private generateNewProjectStructure(requirements: any): string {
+  private generateNewProjectStructure(requirements: {
+    projectType: string;
+    techStack: string[];
+    database?: string;
+    authentication?: string;
+    deployment?: string;
+  }): string {
     const projectType = requirements.projectType;
     const techStack = requirements.techStack || [];
     
@@ -1006,7 +1024,13 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
     return structure;
   }
 
-  private getRecommendedDependencies(requirements: any): string[] {
+  private getRecommendedDependencies(requirements: {
+    projectType: string;
+    techStack: string[];
+    database?: string;
+    authentication?: string;
+    deployment?: string;
+  }): string[] {
     const deps: string[] = [];
     const techStack = requirements.techStack || [];
     

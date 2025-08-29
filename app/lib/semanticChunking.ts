@@ -107,7 +107,6 @@ export class SemanticChunker {
       // Collect imports and exports first
       const imports: string[] = [];
       const exports: string[] = [];
-      const topLevelStatements: any[] = [];
 
       traverse(ast, {
         // Collect imports
@@ -284,7 +283,7 @@ export class SemanticChunker {
     }
   }
 
-  private processFunctionDeclaration(path: any, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
+  private processFunctionDeclaration(path: traverse.NodePath<t.FunctionDeclaration>, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
     const funcContent = this.getNodeContent(content, path.node);
     const funcName = path.node.id?.name || 'anonymous';
     
@@ -305,7 +304,7 @@ export class SemanticChunker {
     ));
   }
 
-  private processClassDeclaration(path: any, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
+  private processClassDeclaration(path: traverse.NodePath<t.ClassDeclaration>, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
     const classContent = this.getNodeContent(content, path.node);
     const className = path.node.id?.name || 'anonymous';
     
@@ -328,7 +327,7 @@ export class SemanticChunker {
     chunks.push(classChunk);
 
     // Process class methods as separate chunks
-    path.node.body.body.forEach((node: any) => {
+    path.node.body.body.forEach((node: t.Statement) => {
       if (t.isMethodDefinition(node) || t.isClassMethod(node)) {
         const methodContent = this.getNodeContent(content, node);
         const methodName = t.isIdentifier(node.key) ? node.key.name : 'anonymous';
@@ -599,7 +598,7 @@ export class SemanticChunker {
   /**
    * Extract content from AST node
    */
-  private getNodeContent(sourceCode: string, node: any): string {
+  private getNodeContent(sourceCode: string, node: t.Node): string {
     if (!node.loc) return '';
     
     const lines = sourceCode.split('\n');

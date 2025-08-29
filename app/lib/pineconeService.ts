@@ -29,7 +29,7 @@ export interface PineconeVector {
 
 export interface SearchOptions {
   topK?: number;
-  filter?: Record<string, any>;
+  filter?: Record<string, string | number | boolean | string[] | { $eq?: string | number | boolean; $in?: string[] }>;
   includeMetadata?: boolean;
   includeValues?: boolean;
   namespace?: string;
@@ -251,7 +251,14 @@ export class PineconeService {
       
       const index = this.pinecone.index(this.indexName);
       
-      const queryRequest: any = {
+      const queryRequest: {
+        vector: number[];
+        topK: number;
+        includeMetadata: boolean;
+        includeValues: boolean;
+        filter?: Record<string, string | number | boolean | string[] | { $eq?: string | number | boolean; $in?: string[] }>;
+        namespace?: string;
+      } = {
         vector: queryEmbedding,
         topK,
         includeMetadata,

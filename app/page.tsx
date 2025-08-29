@@ -19,6 +19,7 @@ import { PlanHistoryService, SavedPlan, PlanComparison } from "./lib/planHistory
 import SemanticSearch, { SemanticSearchResult } from "./components/SemanticSearch";
 import SemanticSearchResults from "./components/SemanticSearchResults";
 import GitHubImport, { GitHubRepository, SyncProgress } from "./components/GitHubImport";
+import WebhookStatus from "./components/WebhookStatus";
 
 export interface UploadedFile {
   name: string;
@@ -799,7 +800,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
     
     // Create a synthetic stored codebase from the GitHub repository
     if (syncProgress.result) {
-      const githubCodebase = {
+      const githubCodebase: StoredCodebase = {
         metadata: {
           id: `github_${repository.owner.login}_${repository.name}`,
           name: repository.fullName,
@@ -807,16 +808,21 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
           totalSize: repository.size * 1024, // GitHub size is in KB
           languages: repository.language ? [repository.language.toLowerCase()] : ['unknown'],
           lastProcessed: Date.now(),
-          created: Date.now(),
-          source: 'github' as const,
-          repositoryUrl: repository.htmlUrl,
-          commit: syncProgress.result.commit,
-          merkleTreeHash: syncProgress.result.merkleTreeHash
+          version: '1.0'
         },
-        files: [] // Files are already indexed in Pinecone, no need to store locally
+        files: [], // Files are already indexed in Pinecone, no need to store locally
+        searchIndex: {
+          byKeyword: {},
+          byLanguage: {},
+          byFunction: {},
+          byClass: {},
+          byDependency: {},
+          byFileName: {},
+          byFilePath: {}
+        }
       };
-      
-      setStoredCodebase(githubCodebase as any);
+
+      setStoredCodebase(githubCodebase);
       setIsIndexed(true);
       
       toast.success(`🎉 Repository ${repository.name} imported and indexed successfully! ${syncProgress.result.filesCount} files processed.`);
@@ -1071,6 +1077,15 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
             </div>
           )}
 
+          {/* Webhook Status for GitHub Repositories */}
+          {importedFromGitHub && importedRepository && githubSyncProgress?.result?.webhookSetup && (
+            <WebhookStatus
+              repositoryFullName={importedRepository.fullName}
+              webhookId={githubSyncProgress.result.webhookId}
+              className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700"
+            />
+          )}
+
           {/* Plan Display */}
           {(generatedPlan || isGeneratingPlan || planError) && searchMode === 'plan' && (
             <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 p-6">
@@ -1088,7 +1103,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                       onClick={() => {
                         setSelectedSavedPlan((prev) => {
                           const plans = PlanHistoryService.getAllPlans();
-                          const found = plans.find(p => p.id === (generatedPlan as any).id) || null;
+                          const found = plans.find(p => p.id === generatedPlan.id) || null;
                           return found;
                         });
                         setShowProgressTracker(true);

@@ -402,15 +402,15 @@ export class MerkleTreeService {
     const changes = this.detectChanges(oldTree, newTree);
     
     const patch = {
-      added: changes.added.map(path => ({
-        path,
-        file: newTree.nodes.get(path)?.file!
-      })).filter(item => item.file),
-      
-      modified: changes.modified.map(path => ({
-        path,
-        file: newTree.nodes.get(path)?.file!
-      })).filter(item => item.file),
+      added: changes.added.map(path => {
+        const file = newTree.nodes.get(path)?.file;
+        return file ? { path, file } : null;
+      }).filter((item): item is { path: string; file: FileNode } => item !== null),
+
+      modified: changes.modified.map(path => {
+        const file = newTree.nodes.get(path)?.file;
+        return file ? { path, file } : null;
+      }).filter((item): item is { path: string; file: FileNode } => item !== null),
       
       deleted: changes.deleted
     };

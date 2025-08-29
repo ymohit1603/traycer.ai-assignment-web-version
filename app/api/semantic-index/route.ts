@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const searchService = initializeSearchService();
     
     const body = await request.json();
-    const { action, codebaseId, options = {} } = body;
+    const { action, codebaseId } = body;
 
     console.log(`🔧 Semantic indexing API: ${action} for codebase ${codebaseId}`);
 
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Start indexing (async)
-        const indexingPromise = searchService.indexCodebase(
+        searchService.indexCodebase(
           storedCodebase.files,
           codebaseId,
           (progress) => {
@@ -100,8 +100,7 @@ export async function POST(request: NextRequest) {
 
         // First, delete existing vectors
         try {
-          const { pineconeService } = (searchService as any);
-          await pineconeService.deleteCodebaseChunks(codebaseId);
+          await searchService.deleteCodebaseChunks(codebaseId);
           console.log(`🗑️ Deleted existing vectors for codebase: ${codebaseId}`);
         } catch (error) {
           console.warn(`⚠️ Error deleting existing vectors: ${error}`);
@@ -124,7 +123,7 @@ export async function POST(request: NextRequest) {
           errors: []
         });
 
-        const indexingPromise = searchService.indexCodebase(
+        searchService.indexCodebase(
           storedCodebase.files,
           codebaseId,
           (progress) => {
@@ -150,8 +149,7 @@ export async function POST(request: NextRequest) {
 
         console.log(`🗑️ Deleting index for codebase: ${codebaseId}`);
 
-        const { pineconeService } = (searchService as any);
-        await pineconeService.deleteCodebaseChunks(codebaseId);
+        await searchService.deleteCodebaseChunks(codebaseId);
 
         return NextResponse.json({
           success: true,
@@ -231,8 +229,7 @@ export async function GET(request: NextRequest) {
         
         // Check if codebase is indexed by checking Pinecone
         try {
-          const { pineconeService } = (searchService as any);
-          const chunks = await pineconeService.getChunksByCodebase(codebaseId, {
+          const chunks = await searchService.getChunksByCodebase(codebaseId, {
             topK: 1
           });
 
@@ -325,8 +322,7 @@ export async function DELETE(request: NextRequest) {
       console.log(`🗑️ DELETE: Removing index for codebase: ${codebaseId}`);
       
       const searchService = initializeSearchService();
-      const { pineconeService } = (searchService as any);
-      await pineconeService.deleteCodebaseChunks(codebaseId);
+      await searchService.deleteCodebaseChunks(codebaseId);
 
       return NextResponse.json({
         success: true,

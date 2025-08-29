@@ -85,7 +85,7 @@ export default function ClarifyingQuestions({
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">
-              Let's clarify your requirements
+              Let&apos;s clarify your requirements
             </h2>
             <button
               onClick={onCancel}
@@ -146,7 +146,7 @@ export default function ClarifyingQuestions({
           {/* Original Prompt Context */}
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <h4 className="text-sm font-medium text-gray-700 mb-2">Original request:</h4>
-            <p className="text-sm text-gray-600 italic">"{session.originalPrompt}"</p>
+            <p className="text-sm text-gray-600 italic">&ldquo;{session.originalPrompt}&rdquo;</p>
           </div>
         </div>
 

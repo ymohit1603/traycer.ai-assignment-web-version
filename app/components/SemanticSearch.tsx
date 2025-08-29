@@ -436,10 +436,10 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
         <div className="bg-gray-800 bg-opacity-50 rounded-lg p-3">
           <h4 className="text-sm font-medium text-gray-300 mb-2">💡 Search Tips</h4>
           <ul className="text-xs text-gray-400 space-y-1">
-            <li>• Ask specific questions: "How does the login function work?"</li>
-            <li>• Find patterns: "Show me similar error handling approaches"</li>
-            <li>• Discover functionality: "Where is data validation implemented?"</li>
-            <li>• Get context: "What components use the UserService?"</li>
+            <li>• Ask specific questions: &ldquo;How does the login function work?&rdquo;</li>
+            <li>• Find patterns: &ldquo;Show me similar error handling approaches&rdquo;</li>
+            <li>• Discover functionality: &ldquo;Where is data validation implemented?&rdquo;</li>
+            <li>• Get context: &ldquo;What components use the UserService?&rdquo;</li>
           </ul>
         </div>
 
@@ -453,7 +453,7 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
               </span>
             </div>
             
-            <p className="text-xs text-gray-400 mb-2">"{lastResults.metadata.query}"</p>
+            <p className="text-xs text-gray-400 mb-2">&ldquo;{lastResults.metadata.query}&rdquo;</p>
             
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div>

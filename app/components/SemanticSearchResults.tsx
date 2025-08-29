@@ -113,7 +113,7 @@ export default function SemanticSearchResults({ results, onClose }: SemanticSear
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'overview' | 'files' | 'code' | 'context')}
               className={`flex items-center space-x-2 pb-2 px-1 text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'text-blue-400 border-b-2 border-blue-400'

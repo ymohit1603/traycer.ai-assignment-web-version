@@ -562,12 +562,32 @@ export class SimilaritySearchService {
   }
 
   /**
+   * Delete all chunks for a specific codebase
+   */
+  async deleteCodebaseChunks(codebaseId: string): Promise<void> {
+    await this.pineconeService.deleteCodebaseChunks(codebaseId);
+  }
+
+  /**
+   * Get chunks by codebase for status checking
+   */
+  async getChunksByCodebase(codebaseId: string, options?: { topK?: number }): Promise<SearchResult[]> {
+    return await this.pineconeService.getChunksByCodebase(codebaseId, options);
+  }
+
+  /**
    * Health check for the entire search service
    */
   async healthCheck(): Promise<{
     status: 'healthy' | 'degraded' | 'unhealthy';
     components: {
-      pinecone: any;
+      pinecone: {
+        connected: boolean;
+        indexExists: boolean;
+        indexReady: boolean;
+        vectorCount?: number;
+        error?: string;
+      };
       embeddings: boolean;
       chunking: boolean;
     };

@@ -49,7 +49,6 @@ export async function GET(request: NextRequest) {
 
     const accessToken = tokenData.access_token;
     const scope = tokenData.scope;
-    const tokenType = tokenData.token_type;
 
     console.log('✅ GitHub OAuth successful, scopes:', scope);
 

@@ -153,7 +153,7 @@ export default function FileUpload({ onFilesUploaded, onProgressUpdate }: FileUp
           ref={inputRef}
           type="file"
           multiple
-          {...({ webkitdirectory: "" } as any)}
+          {...({ webkitdirectory: "" } as { webkitdirectory?: string })}
           onChange={handleChange}
           className="hidden"
         />

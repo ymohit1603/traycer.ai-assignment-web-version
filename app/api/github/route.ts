@@ -2,9 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GitHubService } from '../../lib/githubService';
 import { SimilaritySearchService } from '../../lib/similaritySearch';
 import { MerkleTreeService } from '../../lib/merkleTree';
+import { RepositoryStorageService } from '../../lib/repositoryStorage';
+
+interface SyncResult {
+  syncId?: string;
+  commit?: string;
+  filesCount?: number;
+  merkleTreeHash?: string;
+  webhookId?: number;
+  webhookSetup?: boolean;
+  changes?: {
+    totalChanges: number;
+    added: string[];
+    modified: string[];
+    deleted: string[];
+  };
+}
+
+interface SyncProgressData {
+  phase: 'fetching' | 'processing' | 'indexing' | 'complete' | 'error';
+  progress: number;
+  message: string;
+  filesProcessed?: number;
+  totalFiles?: number;
+  errors?: string[];
+  result?: SyncResult;
+}
 
 // Store sync progress for streaming updates
-const syncProgress = new Map<string, any>();
+const syncProgress = new Map<string, SyncProgressData>();
 
 export async function POST(request: NextRequest) {
   try {
@@ -71,7 +97,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Start sync process (async)
-        const syncPromise = githubService.syncRepository(
+        githubService.syncRepository(
           owner,
           repo,
           branch,
@@ -119,18 +145,60 @@ export async function POST(request: NextRequest) {
                 syncProgress.set(progressId, {
                   ...syncProgress.get(progressId),
                   phase: 'indexing',
-                  progress: 80 + (indexProgress.progress * 0.2),
+                  progress: 70 + (indexProgress.progress * 0.15),
                   message: `Indexing: ${indexProgress.message}`,
                   currentFile: indexProgress.currentFile
                 });
               }
             );
 
+            // Set up webhook for automatic updates
+            let webhookInfo = null;
+            try {
+              syncProgress.set(progressId, {
+                ...syncProgress.get(progressId),
+                phase: 'indexing',
+                progress: 85,
+                message: 'Setting up webhook for auto-updates...'
+              });
+
+              const webhookUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/github/webhook`;
+              webhookInfo = await githubService.setupWebhook(owner, repo, webhookUrl);
+              
+              console.log(`🔗 Webhook setup successful: ${webhookInfo.webhookId}`);
+            } catch (webhookError) {
+              console.warn(`⚠️ Webhook setup failed (continuing without webhook):`, webhookError);
+              // Continue without webhook - manual sync will still work
+            }
+
+            // Store repository sync data
+            const repositoryInfo = {
+              id: Date.now(), // This would be the GitHub repository ID in a real implementation
+              full_name: `${owner}/${repo}`,
+              name: repo,
+              owner: { login: owner },
+              default_branch: branch || 'main'
+            };
+
+            const syncData = RepositoryStorageService.createRepositorySyncData(
+              repositoryInfo,
+              codebaseId || `github_${owner}_${repo}`,
+              syncResult.merkleTree,
+              {
+                webhookId: webhookInfo?.webhookId,
+                webhookSecret: webhookInfo?.secret,
+                webhookUrl: webhookInfo ? `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/github/webhook` : undefined,
+                accessToken: accessToken // Store for webhook processing (encrypt in production)
+              }
+            );
+
+            await RepositoryStorageService.storeRepositorySync(syncData);
+
             // Mark as complete
             syncProgress.set(progressId, {
               phase: 'complete',
               progress: 100,
-              message: 'Repository sync and indexing complete!',
+              message: 'Repository sync, indexing, and webhook setup complete!',
               filesProcessed: syncResult.files.length,
               totalFiles: syncResult.files.length,
               errors: [],
@@ -138,11 +206,13 @@ export async function POST(request: NextRequest) {
                 syncId: syncResult.syncId,
                 commit: syncResult.commit,
                 filesCount: syncResult.files.length,
-                merkleTreeHash: syncResult.merkleTree.rootHash
+                merkleTreeHash: syncResult.merkleTree.rootHash,
+                webhookId: webhookInfo?.webhookId,
+                webhookSetup: !!webhookInfo
               }
             });
 
-            console.log(`✅ Repository sync and indexing complete: ${progressId}`);
+            console.log(`✅ Repository sync, indexing, and webhook setup complete: ${progressId}`);
 
           } catch (indexError) {
             console.error('❌ Error during indexing:', indexError);
@@ -200,7 +270,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Start incremental sync
-        const incrementalSyncPromise = githubService.incrementalSync(
+        githubService.incrementalSync(
           owner,
           repo,
           oldMerkleTree,

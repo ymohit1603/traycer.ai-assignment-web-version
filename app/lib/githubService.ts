@@ -1,6 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import { MerkleTreeService, MerkleTree, ChangeDetectionResult } from './merkleTree';
-
+import crypto from 'crypto';
 export interface GitHubRepository {
   id: number;
   name: string;
@@ -648,7 +648,7 @@ export class GitHubService {
         },
         scopes: [] // GitHub API v4 doesn't return scopes in this endpoint
       };
-    } catch (error) {
+    } catch {
       return { valid: false };
     }
   }
