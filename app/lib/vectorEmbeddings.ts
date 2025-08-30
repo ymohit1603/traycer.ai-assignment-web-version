@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { CodeChunk } from './semanticChunking';
 
 export interface EmbeddingResult {
@@ -19,27 +18,121 @@ export interface EmbeddingBatch {
 }
 
 export class VectorEmbeddingService {
-  private openai: OpenAI;
-  private model: string = 'text-embedding-ada-002';
-  private maxBatchSize: number = 100; // OpenAI batch limit
+  private apiKey: string;
+  private baseURL: string = 'https://api.voyageai.com/v1';
+  private model: string = 'voyage-3-large';
+  
+  /**
+   * Get the expected embedding dimension for the current model
+   */
+  getExpectedDimension(): number {
+    const modelDimensions: { [key: string]: number } = {
+      'voyage-3-large': 1024,
+      'voyage-3': 1024,
+      'voyage-2': 1024,
+      'voyage-large-2-instruct': 1024,
+      'text-embedding-3-small': 1536,
+      'text-embedding-3-large': 3072,
+      'text-embedding-ada-002': 1536
+    };
+    
+    return modelDimensions[this.model] || 1024;
+  }
+  private maxTokensPerRequest: number = 2500; // Conservative limit for 10K TPM (leaves buffer)
   private maxTokensPerChunk: number = 8000; // Model context limit
+  private requestDelay: number = 20000; // Exactly 20 seconds for 3 RPM
+  private maxRetries: number = 5;
+  private maxBatchRetries: number = 10; // More retries for batch processing
+  private requestsThisMinute: number = 0;
+  private tokensThisMinute: number = 0;
+  private minuteStartTime: number = Date.now();
 
   constructor(apiKey?: string) {
-    const key = apiKey || process.env.OPEN_AI_API || process.env.NEXT_PUBLIC_OPEN_AI_API;
+    const key = apiKey || process.env.VOYAGE_API_KEY;
     
     if (!key) {
-      throw new Error('OpenAI API key not found. Please set OPEN_AI_API environment variable.');
+      throw new Error('Voyage AI API key not found. Please set VOYAGE_API_KEY environment variable.');
     }
 
-    this.openai = new OpenAI({
-      baseURL: "https://openrouter.ai/api/v1",
-      apiKey: key,
-      defaultHeaders: {
-        "HTTP-Referer": "https://traycer-ai.vercel.app",
-        "X-Title": "Traycer AI",
-      },
-      dangerouslyAllowBrowser: true,
-    });
+    this.apiKey = key;
+    
+    // Log optimized rate limiting info
+    console.log('🚀 Voyage AI Optimized: Using token-aware batching (3 RPM, 10K TPM)');
+    console.log(`📊 Target: ~${this.maxTokensPerRequest} tokens per request, ${this.requestDelay/1000}s intervals`);
+    console.log(`📏 Model: ${this.model} (${this.getExpectedDimension()} dimensions)`);
+  }
+
+  /**
+   * Estimate token count for a text string
+   */
+  private estimateTokenCount(text: string): number {
+    // Rough estimation: ~4 characters per token for code
+    return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Create optimal batches based on token limits
+   */
+  private createOptimalBatches(chunks: CodeChunk[]): CodeChunk[][] {
+    const batches: CodeChunk[][] = [];
+    let currentBatch: CodeChunk[] = [];
+    let currentBatchTokens = 0;
+
+    for (const chunk of chunks) {
+      const chunkText = this.prepareTextForEmbedding(chunk);
+      const chunkTokens = this.estimateTokenCount(chunkText);
+      
+      // If adding this chunk would exceed token limit, start new batch
+      if (currentBatchTokens + chunkTokens > this.maxTokensPerRequest && currentBatch.length > 0) {
+        batches.push(currentBatch);
+        currentBatch = [chunk];
+        currentBatchTokens = chunkTokens;
+      } else {
+        currentBatch.push(chunk);
+        currentBatchTokens += chunkTokens;
+      }
+    }
+
+    // Add the last batch if it has chunks
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    return batches;
+  }
+
+  /**
+   * Check and update rate limiting counters
+   */
+  private checkRateLimit(estimatedTokens: number): { canProceed: boolean; waitTime: number } {
+    const now = Date.now();
+    
+    // Reset counters if a minute has passed
+    if (now - this.minuteStartTime >= 60000) {
+      this.requestsThisMinute = 0;
+      this.tokensThisMinute = 0;
+      this.minuteStartTime = now;
+    }
+
+    // Check if we can make this request
+    const wouldExceedRequests = this.requestsThisMinute >= 3;
+    const wouldExceedTokens = this.tokensThisMinute + estimatedTokens > 10000;
+
+    if (wouldExceedRequests || wouldExceedTokens) {
+      // Calculate wait time until next minute
+      const timeUntilReset = 60000 - (now - this.minuteStartTime);
+      return { canProceed: false, waitTime: timeUntilReset };
+    }
+
+    return { canProceed: true, waitTime: 0 };
+  }
+
+  /**
+   * Update rate limiting counters after successful request
+   */
+  private updateRateLimitCounters(tokensUsed: number): void {
+    this.requestsThisMinute++;
+    this.tokensThisMinute += tokensUsed;
   }
 
   /**
@@ -52,24 +145,55 @@ export class VectorEmbeddingService {
 
     console.log(`🔢 Generating embeddings for ${chunks.length} chunks...`);
 
-    // Process chunks in batches
-    const batches = this.createBatches(chunks);
+    // Prioritize chunks by importance (main files first)
+    const prioritizedChunks = VectorEmbeddingService.prioritizeChunks(chunks);
+    console.log(`📋 Prioritized chunks: processing important files first`);
+
+    // Create optimal batches based on token limits
+    const optimalBatches = this.createOptimalBatches(prioritizedChunks);
+    console.log(`📊 Created ${optimalBatches.length} optimal batches (avg ${Math.round(chunks.length / optimalBatches.length)} chunks per batch)`);
     
-    for (let i = 0; i < batches.length; i++) {
-      const batch = batches[i];
-      console.log(`📦 Processing batch ${i + 1}/${batches.length} (${batch.length} chunks)`);
+    for (let i = 0; i < optimalBatches.length; i++) {
+      const batch = optimalBatches[i];
+      const batchNum = i + 1;
+      
+      // Estimate tokens for this batch
+      const batchText = batch.map(chunk => this.prepareTextForEmbedding(chunk)).join(' ');
+      const estimatedTokens = this.estimateTokenCount(batchText);
+      
+      console.log(`📦 Processing batch ${batchNum}/${optimalBatches.length} (${batch.length} chunks, ~${estimatedTokens} tokens)`);
+      
+      // Check rate limits
+      const rateLimitCheck = this.checkRateLimit(estimatedTokens);
+      if (!rateLimitCheck.canProceed) {
+        console.log(`⏱️ Rate limit reached, waiting ${Math.ceil(rateLimitCheck.waitTime/1000)}s for reset...`);
+        await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTime + 1000)); // +1s buffer
+      }
       
       try {
         const batchResults = await this.processBatch(batch);
         embeddings.push(...batchResults.embeddings);
         totalTokens += batchResults.totalTokens;
         
-        // Small delay between batches to avoid rate limiting
-        if (i < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+        // Update rate limit counters
+        this.updateRateLimitCounters(estimatedTokens);
+        
+        console.log(`✅ Generated ${batchResults.embeddings.length} embeddings in batch ${batchNum}`);
+        
+        // Log progress with time estimation
+        const progress = Math.round((embeddings.length / chunks.length) * 100);
+        const timePerChunk = (Date.now() - startTime) / embeddings.length;
+        const estimatedTimeRemaining = timePerChunk * (chunks.length - embeddings.length);
+        console.log(`📊 Progress: ${progress}% (${embeddings.length}/${chunks.length} chunks) - ETA: ${Math.ceil(estimatedTimeRemaining/1000/60)}min`);
+        
+        // Add delay for next request (unless it's the last batch)
+        if (i < optimalBatches.length - 1) {
+          console.log(`⏱️ Rate limiting: waiting ${this.requestDelay/1000}s before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, this.requestDelay));
         }
+        
       } catch (error) {
-        console.error(`❌ Error processing batch ${i + 1}:`, error);
+        console.error(`❌ Error processing batch ${batchNum}:`, error);
         // Continue with other batches, but log the failed chunks
         batch.forEach(chunk => {
           console.warn(`⚠️ Failed to generate embedding for chunk: ${chunk.id}`);
@@ -81,9 +205,10 @@ export class VectorEmbeddingService {
     
     console.log(`✅ Generated ${embeddings.length} embeddings in ${processingTime}ms`);
     console.log(`📊 Total tokens used: ${totalTokens}`);
+    console.log(`⚡ Processing speed: ${Math.round(embeddings.length / (processingTime/1000))} chunks/second`);
 
     return {
-      chunks,
+      chunks: prioritizedChunks,
       embeddings,
       totalTokens,
       processingTime
@@ -96,251 +221,217 @@ export class VectorEmbeddingService {
   async generateSingleEmbedding(chunk: CodeChunk): Promise<EmbeddingResult> {
     const text = this.prepareTextForEmbedding(chunk);
 
-    try {
-      console.log(`🔢 Generating embedding for chunk: ${chunk.id}`);
-      let response;
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        response = await this.openai.embeddings.create({
-          model: this.model,
-          input: text,
-          encoding_format: 'float'
+        console.log(`🔢 Generating embedding for chunk: ${chunk.id} (attempt ${attempt}/${this.maxRetries})`);
+        
+        const response = await fetch(`${this.baseURL}/embeddings`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.model,
+            input: text,
+          }),
         });
+
+        if (response.status === 429) {
+          const errorText = await response.text();
+          const waitTime = Math.min(this.requestDelay * Math.pow(2, attempt - 1), 120000); // Max 2 minutes
+          console.log(`⏱️ Rate limited (429), waiting ${waitTime/1000}s before retry ${attempt}/${this.maxRetries}...`);
+          
+          if (attempt === this.maxRetries) {
+            throw new Error(`Rate limit exceeded after ${this.maxRetries} attempts. Consider adding payment method to Voyage AI for higher limits.`);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Voyage AI API error: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        
+        // Parse Voyage AI response format
+        let embedding;
+        
+        // Standard Voyage AI format: { data: [{ embedding: [...] }] }
+        if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
+          const firstItem = data.data[0];
+          if (firstItem?.embedding && Array.isArray(firstItem.embedding)) {
+            embedding = firstItem.embedding;
+          }
+        }
+        
+        // Alternative formats (fallbacks)
+        if (!embedding && data?.embeddings && Array.isArray(data.embeddings)) {
+          embedding = data.embeddings[0];
+        }
+        
+        if (!embedding && Array.isArray(data?.embedding)) {
+          embedding = data.embedding;
+        }
+        
+        if (!embedding) {
+          throw new Error('Invalid Voyage AI response: could not find embedding vector');
+        }
+
+        // Validate embedding
+        if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+          throw new Error(`Invalid embedding: not an array or empty array. Type: ${typeof embedding}, Length: ${embedding?.length}`);
+        }
+        
+        if (!embedding.every(val => typeof val === 'number')) {
+          throw new Error('Invalid embedding: contains non-numeric values');
+        }
+
+        console.log('✅ Successfully generated embedding:', embedding.length, 'dimensions');
+        
+        return {
+          chunkId: chunk.id,
+          embedding,
+          model: this.model,
+          usage: {
+            promptTokens: data.usage?.prompt_tokens || 0,
+            totalTokens: data.usage?.total_tokens || 0
+          }
+        };
       } catch (error) {
-        console.error('Error from OpenAI API:', error);
-        throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-      
-      if (!response) {
-        throw new Error('Received null or undefined response from OpenAI API');
-      }
-
-      // DEBUG: OpenRouter response structure (safe logging)
-      console.log('🔍 Response analysis:');
-      console.log('- Type:', typeof response);
-      console.log('- Keys:', Object.keys(response || {}));
-      console.log('- Has data array:', Array.isArray(response?.data));
-      console.log('- Data length:', response?.data?.length);
-      console.log('- Object field:', response?.object);
-      console.log('- Model field:', response?.model);
-      
-      if (response?.data?.[0]) {
-        const firstItem = response.data[0];
-        console.log('- First item type:', firstItem?.object);
-        console.log('- Has embedding:', !!firstItem?.embedding);
-        console.log('- Embedding type:', typeof firstItem?.embedding);
-        console.log('- Embedding length:', firstItem?.embedding?.length);
-      }
-
-      // Handle different response formats
-      // OpenRouter and OpenAI might have different response structures
-      let embedding;
-      
-      // Parse OpenRouter response format
-      if (response?.data && Array.isArray(response.data) && response.data.length > 0) {
-        const firstItem = response.data[0];
+        if (attempt === this.maxRetries) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error(`❌ Error generating embedding for chunk ${chunk.id} after ${this.maxRetries} attempts:`, errorMessage);
+          throw error;
+        }
         
-        // OpenRouter standard format: { object: "embedding", embedding: [...], index: 0 }
-        if (firstItem?.embedding && Array.isArray(firstItem.embedding)) {
-          embedding = firstItem.embedding;
-          console.log('✅ Found embedding in OpenRouter data[0].embedding');
-        }
-        // Fallback: check if data[0] is directly an array (unlikely but possible)
-        else if (Array.isArray(firstItem) && firstItem.length > 100) {
-          embedding = firstItem;
-          console.log('✅ Found embedding as direct array in data[0]');
-        }
-      } 
-      
-      if (!embedding && response.embeddings && Array.isArray(response.embeddings) && response.embeddings.length > 0) {
-        // Alternative format: { embeddings: [[...]] }
-        const embeddingData = response.embeddings[0];
-        if (Array.isArray(embeddingData)) {
-          embedding = embeddingData;
-          console.log('✅ Found embedding in embeddings[0] array format');
-        } else if (embeddingData && embeddingData.embedding) {
-          embedding = embeddingData.embedding;
-          console.log('✅ Found embedding in embeddings[0].embedding format');
-        }
-      } 
-      
-      if (!embedding && Array.isArray(response.embedding)) {
-        // Direct array format: { embedding: [...] }
-        embedding = response.embedding;
-        // Found embedding in direct format
-      } 
-      
-      if (!embedding && response.choices && Array.isArray(response.choices) && response.choices.length > 0) {
-        // OpenRouter might use choices format: { choices: [{ embedding: [...] }] }
-        const firstChoice = response.choices[0];
-        if (firstChoice && firstChoice.embedding) {
-          embedding = firstChoice.embedding;
-          // Found embedding in choices format
-        }
+        // If it's not a 429 error, wait a bit and retry
+        console.log(`⚠️ Attempt ${attempt} failed, retrying in 5s...`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
       }
-      
-      if (!embedding && response.result && Array.isArray(response.result)) {
-        // Another possible format: { result: [...] }
-        embedding = response.result;
-        // Found embedding in result format
-      }
-      
-      if (!embedding) {
-        console.error('❌ Could not find embedding in expected locations');
-        
-        // Try to find any array-like structure that could be an embedding
-        for (const [key, value] of Object.entries(response)) {
-          if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') {
-            // Found embedding at alternate key
-            embedding = value;
-            break;
-          }
-          if (Array.isArray(value) && value.length > 0 && Array.isArray(value[0]) && typeof value[0][0] === 'number') {
-            // Found embedding at nested key
-            embedding = value[0];
-            break;
-          }
-        }
-      }
-      
-      if (!embedding) {
-        console.error('❌ No valid embedding found in API response');
-        throw new Error('Invalid API response: could not find embedding vector');
-      }
-
-      // Validate embedding
-      if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
-        console.error('❌ Embedding validation failed - Type:', typeof embedding, 'Length:', embedding?.length);
-        throw new Error(`Invalid embedding: not an array or empty array. Type: ${typeof embedding}, Length: ${embedding?.length}`);
-      }
-      
-      // Additional validation - check if it looks like a real embedding
-      if (embedding.length < 100) {
-        console.warn('⚠️ Embedding seems unusually short:', embedding.length, 'dimensions');
-      }
-      
-      if (!embedding.every(val => typeof val === 'number')) {
-        console.error('❌ Embedding contains non-numeric values');
-        throw new Error('Invalid embedding: contains non-numeric values');
-      }
-
-      // Successfully generated embedding
-
-      return {
-        chunkId: chunk.id,
-        embedding,
-        model: this.model,
-        usage: {
-          promptTokens: response.usage?.prompt_tokens || 0,
-          totalTokens: response.usage?.total_tokens || 0
-        }
-      };
-    } catch (error) {
-      console.error(`❌ Error generating embedding for chunk ${chunk.id}:`, error.message || error);
-      throw error;
     }
   }
 
   /**
-   * Process a batch of chunks
+   * Process a batch of chunks with robust retry logic
    */
   private async processBatch(chunks: CodeChunk[]): Promise<{embeddings: EmbeddingResult[], totalTokens: number}> {
     const texts = chunks.map(chunk => this.prepareTextForEmbedding(chunk));
 
-    try {
-      console.log(`🔢 Processing batch of ${chunks.length} chunks`);
-      const response = await this.openai.embeddings.create({
-        model: this.model,
-        input: texts,
-        encoding_format: 'float'
-      });
-
-      // Validate response structure
-      if (!response.data || !Array.isArray(response.data)) {
-        throw new Error(`Invalid batch API response: missing or invalid data array`);
-      }
-
-      if (response.data.length !== chunks.length) {
-        console.warn(`⚠️ Response data length (${response.data.length}) doesn't match chunks length (${chunks.length})`);
-      }
-
-      const embeddings: EmbeddingResult[] = [];
-      let totalTokens = 0;
-
-      for (let i = 0; i < Math.min(response.data.length, chunks.length); i++) {
-        const item = response.data[i];
-        const chunk = chunks[i];
-
-        if (!item || !item.embedding) {
-          console.error(`❌ Invalid response item at index ${i}:`, item);
-          continue;
-        }
-
-        // Validate embedding
-        if (!Array.isArray(item.embedding) || item.embedding.length === 0) {
-          console.error(`❌ Invalid embedding at index ${i}: not an array or empty`);
-          continue;
-        }
-
-        const avgPromptTokens = Math.floor((response.usage?.prompt_tokens || 0) / chunks.length);
-        const avgTotalTokens = Math.floor((response.usage?.total_tokens || 0) / chunks.length);
-
-        embeddings.push({
-          chunkId: chunk.id,
-          embedding: item.embedding,
-          model: this.model,
-          usage: {
-            promptTokens: avgPromptTokens,
-            totalTokens: avgTotalTokens
-          }
+    for (let attempt = 1; attempt <= this.maxBatchRetries; attempt++) {
+      try {
+        console.log(`🔢 Processing batch of ${chunks.length} chunks with Voyage AI (attempt ${attempt}/${this.maxBatchRetries})`);
+        
+        const response = await fetch(`${this.baseURL}/embeddings`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.model,
+            input: texts,
+          }),
         });
 
-        totalTokens += avgTotalTokens;
-      }
-
-      console.log(`✅ Batch processed successfully: ${embeddings.length}/${chunks.length} embeddings generated`);
-
-      return {
-        embeddings,
-        totalTokens: response.usage?.total_tokens || totalTokens
-      };
-    } catch (error) {
-      console.error('❌ Batch processing failed:', error.message || error);
-
-      // Fallback: process chunks individually
-      console.log('⚠️ Falling back to individual processing...');
-      const embeddings: EmbeddingResult[] = [];
-      let totalTokens = 0;
-      let failedChunks = 0;
-
-      for (const chunk of chunks) {
-        try {
-          const result = await this.generateSingleEmbedding(chunk);
-          embeddings.push(result);
-          totalTokens += result.usage.totalTokens;
-              // Individual processing success
-
-          // Small delay between individual requests
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } catch (chunkError) {
-          failedChunks++;
-          console.error(`❌ Failed to process chunk ${chunk.id}:`, chunkError);
+        if (response.status === 429) {
+          const errorText = await response.text();
+          const baseWaitTime = this.requestDelay;
+          const jitter = Math.random() * 5000; // 0-5 second jitter
+          const waitTime = Math.min(baseWaitTime * Math.pow(2, attempt - 1) + jitter, 300000); // Max 5 minutes
           
-          // Log chunk details for debugging (concise)
-          console.log(`❌ Failed chunk: ${chunk.id} (${chunk.type}, ${chunk.content?.length || 0} chars)`);
+          console.log(`⏱️ Rate limited (429), waiting ${Math.ceil(waitTime/1000)}s before retry ${attempt}/${this.maxBatchRetries}...`);
+          console.log(`📊 Rate limit details: ${errorText}`);
           
-          // Continue processing other chunks
+          if (attempt === this.maxBatchRetries) {
+            throw new Error(`Rate limit exceeded after ${this.maxBatchRetries} attempts. API response: ${errorText}`);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
         }
-      }
-      
-      console.log(`📊 Individual processing complete: ${embeddings.length} success, ${failedChunks} failed`);
-      
-      // If we have at least some embeddings, continue
-      if (embeddings.length === 0) {
-        throw new Error('All chunks failed to generate embeddings');
-      }
 
-      return { embeddings, totalTokens };
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ API error ${response.status}: ${errorText}`);
+          
+          // For non-rate-limit errors, retry with shorter delay
+          if (attempt < this.maxBatchRetries) {
+            const retryWait = Math.min(5000 * attempt, 30000); // 5s, 10s, 15s, etc., max 30s
+            console.log(`⏱️ Retrying in ${retryWait/1000}s due to API error...`);
+            await new Promise(resolve => setTimeout(resolve, retryWait));
+            continue;
+          }
+          
+          throw new Error(`Voyage AI batch API error: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        // Validate response structure
+        if (!data.data || !Array.isArray(data.data)) {
+          throw new Error(`Invalid batch API response: missing or invalid data array`);
+        }
+
+        if (data.data.length !== chunks.length) {
+          console.warn(`⚠️ Response data length (${data.data.length}) doesn't match chunks length (${chunks.length})`);
+        }
+
+        const embeddings: EmbeddingResult[] = [];
+        let totalTokens = 0;
+
+        for (let i = 0; i < Math.min(data.data.length, chunks.length); i++) {
+          const item = data.data[i];
+          const chunk = chunks[i];
+
+          if (!item || !item.embedding) {
+            console.error(`❌ Invalid response item at index ${i}:`, item);
+            continue;
+          }
+
+          // Validate embedding
+          if (!Array.isArray(item.embedding) || item.embedding.length === 0) {
+            console.error(`❌ Invalid embedding at index ${i}: not an array or empty`);
+            continue;
+          }
+
+          const avgPromptTokens = Math.floor((data.usage?.prompt_tokens || 0) / chunks.length);
+          const avgTotalTokens = Math.floor((data.usage?.total_tokens || 0) / chunks.length);
+
+          embeddings.push({
+            chunkId: chunk.id,
+            embedding: item.embedding,
+            model: this.model,
+            usage: {
+              promptTokens: avgPromptTokens,
+              totalTokens: avgTotalTokens
+            }
+          });
+
+          totalTokens += avgTotalTokens;
+        }
+
+        console.log(`✅ Batch processed successfully: ${embeddings.length}/${chunks.length} embeddings generated`);
+
+        return {
+          embeddings,
+          totalTokens: data.usage?.total_tokens || totalTokens
+        };
+      } catch (error) {
+        if (attempt === this.maxBatchRetries) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error(`❌ Batch processing failed after ${this.maxBatchRetries} attempts:`, errorMessage);
+          throw error;
+        }
+        
+        console.log(`⚠️ Attempt ${attempt} failed, retrying...`);
+      }
     }
+    
+    throw new Error('Batch processing failed after all retry attempts');
   }
 
   /**
@@ -387,38 +478,68 @@ export class VectorEmbeddingService {
   }
 
   /**
-   * Create batches from chunks, respecting size limits
+   * Prioritize chunks by importance (main files first, then components, then tests)
    */
-  private createBatches(chunks: CodeChunk[]): CodeChunk[][] {
-    const batches: CodeChunk[][] = [];
-    let currentBatch: CodeChunk[] = [];
-    let currentBatchTokens = 0;
+  static prioritizeChunks(chunks: CodeChunk[]): CodeChunk[] {
+    const priorityOrder = {
+      // Main application files (highest priority)
+      main: 1,
+      index: 1,
+      app: 1,
+      
+      // Core library files
+      service: 2,
+      lib: 2,
+      util: 2,
+      helper: 2,
+      
+      // Components and UI
+      component: 3,
+      ui: 3,
+      
+      // API and routes
+      api: 4,
+      route: 4,
+      
+      // Configuration and types
+      config: 5,
+      type: 5,
+      interface: 5,
+      
+      // Tests and specs (lowest priority)
+      test: 6,
+      spec: 6,
+      mock: 6
+    };
 
-    for (const chunk of chunks) {
-      const chunkText = this.prepareTextForEmbedding(chunk);
-      const estimatedTokens = Math.ceil(chunkText.length / 4);
-
-      // Check if adding this chunk would exceed batch limits
-      if (currentBatch.length >= this.maxBatchSize || 
-          currentBatchTokens + estimatedTokens > this.maxTokensPerChunk * this.maxBatchSize) {
-        
-        if (currentBatch.length > 0) {
-          batches.push(currentBatch);
-          currentBatch = [];
-          currentBatchTokens = 0;
+    return chunks.sort((a, b) => {
+      const aPath = a.filePath.toLowerCase();
+      const bPath = b.filePath.toLowerCase();
+      
+      // Get priority scores
+      let aPriority = 7; // Default lowest priority
+      let bPriority = 7;
+      
+      for (const [keyword, priority] of Object.entries(priorityOrder)) {
+        if (aPath.includes(keyword)) {
+          aPriority = Math.min(aPriority, priority);
+        }
+        if (bPath.includes(keyword)) {
+          bPriority = Math.min(bPriority, priority);
         }
       }
-
-      currentBatch.push(chunk);
-      currentBatchTokens += estimatedTokens;
-    }
-
-    // Add the last batch
-    if (currentBatch.length > 0) {
-      batches.push(currentBatch);
-    }
-
-    return batches;
+      
+      // Secondary sort by file type preference
+      if (aPriority === bPriority) {
+        const aIsMainCode = /\.(ts|tsx|js|jsx)$/.test(aPath);
+        const bIsMainCode = /\.(ts|tsx|js|jsx)$/.test(bPath);
+        
+        if (aIsMainCode && !bIsMainCode) return -1;
+        if (!aIsMainCode && bIsMainCode) return 1;
+      }
+      
+      return aPriority - bPriority;
+    });
   }
 
   /**
@@ -475,18 +596,32 @@ export class VectorEmbeddingService {
   async generateQueryEmbedding(query: string): Promise<number[]> {
     try {
       console.log(`🔢 Generating query embedding for: "${query.substring(0, 50)}..."`);
-      const response = await this.openai.embeddings.create({
-        model: this.model,
-        input: query,
-        encoding_format: 'float'
+      
+      const response = await fetch(`${this.baseURL}/embeddings`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          input: query,
+        }),
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Voyage AI query API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+
       // Validate response structure
-      if (!response.data || !Array.isArray(response.data) || response.data.length === 0) {
+      if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
         throw new Error(`Invalid query API response: no data array or empty data array`);
       }
 
-      const firstItem = response.data[0];
+      const firstItem = data.data[0];
       if (!firstItem || !firstItem.embedding) {
         throw new Error(`Invalid query API response: missing embedding in response`);
       }
@@ -501,7 +636,8 @@ export class VectorEmbeddingService {
       console.log(`✅ Query embedding generated successfully, dimension: ${embedding.length}`);
       return embedding;
     } catch (error) {
-      console.error('❌ Error generating query embedding:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Error generating query embedding:', errorMessage);
       console.error('Query length:', query.length);
       throw error;
     }

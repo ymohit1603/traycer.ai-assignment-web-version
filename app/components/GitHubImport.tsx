@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import Image from 'next/image';
 
 export interface GitHubRepository {
   id: number;
@@ -343,7 +344,7 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
           {user && (
             <div className="absolute top-full right-0 mt-2 bg-gray-700 rounded-lg p-3 border border-gray-600 min-w-48 z-10 opacity-0 hover:opacity-100 transition-opacity">
               <div className="flex items-center space-x-2 mb-2">
-                <img src={user.avatarUrl} alt={user.login} className="w-8 h-8 rounded-full" />
+                <Image src={user.avatarUrl} alt={user.login} width={32} height={32} className="rounded-full" />
                 <div>
                   <div className="text-sm font-medium text-white">{user.name || user.login}</div>
                   <div className="text-xs text-gray-400">@{user.login}</div>

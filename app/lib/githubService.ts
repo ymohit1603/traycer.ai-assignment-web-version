@@ -567,34 +567,76 @@ export class GitHubService {
   }
 
   /**
-   * Check if file should be excluded from sync
+   * Check if file should be excluded from sync (matches FileUpload.tsx filtering)
    */
   private isExcludedFile(path: string): boolean {
-    const excludedPatterns = [
-      /node_modules/,
-      /\.git/,
-      /\.DS_Store/,
-      /\.env/,
-      /\.log$/,
-      /\.lock$/,
-      /dist\//, 
-      /build\//,
-      /coverage\//,
-      /\.cache\//,
-      /__pycache__\//,
-      /\.pyc$/,
-      /\.class$/,
-      /\.jar$/,
-      /\.war$/,
-      /\.exe$/,
-      /\.dll$/,
-      /\.so$/,
-      /\.zip$/,
-      /\.tar\.gz$/,
-      /\.rar$/
+    const lowerPath = path.toLowerCase();
+    const fileName = lowerPath.split('/').pop() || '';
+    
+    // Excluded directories (should be anywhere in the path)
+    const excludedDirs = [
+      'node_modules',
+      'vendor',
+      'dist',
+      'build',
+      '.next',
+      '.out', 
+      'target',
+      '.cache',
+      '__pycache__',
+      '.parcel-cache',
+      '.idea',
+      '.vscode',
+      '.git',
+      'coverage'
     ];
-
-    return excludedPatterns.some(pattern => pattern.test(path));
+    
+    // Check if path contains any excluded directory
+    for (const dir of excludedDirs) {
+      if (lowerPath.includes(`/${dir}/`) || lowerPath.startsWith(`${dir}/`) || lowerPath === dir) {
+        return true;
+      }
+    }
+    
+    // Excluded file extensions
+    const excludedExtensions = [
+      '.exe', '.dll', '.so', '.zip', '.tar.gz', '.rar',
+      '.png', '.jpg', '.jpeg', '.gif', '.svg',
+      '.mp3', '.mp4', '.pdf', '.log',
+      '.pyc', '.class', '.jar', '.war'
+    ];
+    
+    for (const ext of excludedExtensions) {
+      if (fileName.endsWith(ext)) {
+        return true;
+      }
+    }
+    
+    // Excluded specific files
+    const excludedFiles = [
+      '.ds_store',
+      'thumbs.db',
+      '.env',
+      '.env.local',
+      'npm-debug.log',
+      'yarn-error.log',
+      'package-lock.json',
+      'yarn.lock',
+      'pnpm-lock.yaml',
+      'poetry.lock',
+      'pipfile.lock'
+    ];
+    
+    if (excludedFiles.includes(fileName)) {
+      return true;
+    }
+    
+    // Excluded patterns
+    if (fileName.startsWith('.env.')) {
+      return true;
+    }
+    
+    return false;
   }
 
   /**

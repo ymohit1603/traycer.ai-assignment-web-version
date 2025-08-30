@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { GitHubService } from '../../../lib/githubService';
 import { SimilaritySearchService } from '../../../lib/similaritySearch';
-import { MerkleTreeService } from '../../../lib/merkleTree';
+import { MerkleTree, MerkleTreeService } from '../../../lib/merkleTree';
 import { RepositoryStorageService } from '../../../lib/repositoryStorage';
 
 interface GitHubWebhookRepository {

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import PromptArea from "./components/PromptArea";
 import UploadProgress from "./components/UploadProgress";
-import FileUpload from "./components/FileUpload";
-import FileTree from "./components/FileTree";
+// import FileUpload from "./components/FileUpload";
+// import FileTree from "./components/FileTree";
 import StreamingProgressTicker from "./components/StreamingProgressTicker";
 import PlanDisplay from "./components/PlanDisplay";
 import { StorageManager, StoredCodebase } from "./lib/storageManager";
@@ -20,6 +20,7 @@ import SemanticSearch, { SemanticSearchResult } from "./components/SemanticSearc
 import SemanticSearchResults from "./components/SemanticSearchResults";
 import GitHubImport, { GitHubRepository, SyncProgress } from "./components/GitHubImport";
 import WebhookStatus from "./components/WebhookStatus";
+import IndexingProgress from "./components/IndexingProgress";
 
 export interface UploadedFile {
   name: string;
@@ -181,6 +182,9 @@ export default function Home() {
   // Upload and Indexing State
   const [isIndexing, setIsIndexing] = useState(false);
   const [isIndexed, setIsIndexed] = useState(false);
+  const [showIndexingProgress, setShowIndexingProgress] = useState(false);
+  const [currentCodebaseId, setCurrentCodebaseId] = useState<string | null>(null);
+  const [queuedPrompt, setQueuedPrompt] = useState<string | null>(null);
   
   // New Project Planning State
   const [showNewProjectPlanning, setShowNewProjectPlanning] = useState(false);
@@ -387,6 +391,14 @@ export default function Home() {
       toast.error("Please enter a prompt");
       return;
     }
+    
+    // Check if indexing is in progress
+    if (isIndexing) {
+      console.log('⏱️ Indexing in progress, queuing prompt...');
+      setQueuedPrompt(prompt);
+      toast.success('Prompt queued! It will be processed when indexing completes.');
+      return;
+    }
 
     console.log(`📝 Prompt: "${prompt}"`);
 
@@ -411,6 +423,11 @@ export default function Home() {
       console.log('🔍 Starting codebase indexing...');
       setIsIndexing(true);
       setIsIndexed(false);
+      setShowIndexingProgress(true);
+      
+      // Generate a unique codebase ID for progress tracking
+      const codebaseId = `codebase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      setCurrentCodebaseId(codebaseId);
       
       // Index the uploaded files
       const indexedCodebase = await indexCodebaseFiles(uploadedFiles);
@@ -418,6 +435,18 @@ export default function Home() {
       setStoredCodebase(indexedCodebase);
       setIsIndexing(false);
       setIsIndexed(true);
+      setShowIndexingProgress(false);
+      
+      // Process queued prompt if any
+      if (queuedPrompt) {
+        console.log('📋 Processing queued prompt after indexing completion...');
+        const savedPrompt = queuedPrompt;
+        setQueuedPrompt(null);
+        setPrompt(savedPrompt);
+        // Generate plan with the queued prompt
+        await generatePlanFromPrompt(savedPrompt, indexedCodebase);
+        return;
+      }
       
       toast.dismiss(loadingToast);
       toast.loading('Generating implementation plan...');
@@ -449,6 +478,39 @@ export default function Home() {
       setPlanError(errorMessage);
       setIsGeneratingPlan(false);
       setIsIndexing(false);
+      setShowIndexingProgress(false);
+    }
+  };
+  
+  // IndexingProgress component callbacks
+  const handleIndexingComplete = () => {
+    console.log('✅ Indexing completed via progress tracker');
+    setIsIndexing(false);
+    setIsIndexed(true);
+    setShowIndexingProgress(false);
+    
+    // Process queued prompt if any
+    if (queuedPrompt && storedCodebase) {
+      console.log('📋 Processing queued prompt after indexing completion...');
+      const savedPrompt = queuedPrompt;
+      setQueuedPrompt(null);
+      setPrompt(savedPrompt);
+      // Generate plan with the queued prompt
+      generatePlanFromPrompt(savedPrompt, storedCodebase);
+    }
+  };
+  
+  const handleIndexingError = (error: string) => {
+    console.error('❌ Indexing failed via progress tracker:', error);
+    setIsIndexing(false);
+    setShowIndexingProgress(false);
+    toast.error(`Indexing failed: ${error}`);
+    setPlanError(`Indexing failed: ${error}`);
+    
+    // Clear queued prompt on error
+    if (queuedPrompt) {
+      setQueuedPrompt(null);
+      toast.error('Queued prompt cancelled due to indexing failure');
     }
   };
 
@@ -829,24 +891,64 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
   // GitHub Event Handlers
   const handleRepositoryImported = async (repository: GitHubRepository, syncProgress: SyncProgress) => {
     console.log('📁 Repository imported from GitHub:', repository.fullName);
+    console.log('📊 Sync progress result:', syncProgress.result);
     
     setImportedFromGitHub(true);
     setImportedRepository(repository);
     setGithubSyncProgress(syncProgress);
     
     // Create a synthetic stored codebase from the GitHub repository
+    // Set it regardless of whether indexing is complete yet
+    const githubCodebase: StoredCodebase = {
+      metadata: {
+        id: `github_${repository.owner.login}_${repository.name}`,
+        name: repository.fullName,
+        totalFiles: syncProgress.result?.filesCount || 0,
+        totalSize: repository.size * 1024, // GitHub size is in KB
+        languages: repository.language ? [repository.language.toLowerCase()] : ['unknown'],
+        lastProcessed: Date.now(),
+        version: '1.0'
+      },
+      files: [], // Files are already indexed in Pinecone, no need to store locally
+      searchIndex: {
+        byKeyword: {},
+        byLanguage: {},
+        byFunction: {},
+        byClass: {},
+        byDependency: {},
+        byFileName: {},
+        byFilePath: {}
+      }
+    };
+
+    console.log('📦 Setting storedCodebase:', githubCodebase.metadata);
+    setStoredCodebase(githubCodebase);
+    
+    // Set indexed state based on whether indexing was successful
     if (syncProgress.result) {
+      setIsIndexed(true);
+      toast.success(`🎉 Repository ${repository.name} imported and indexed successfully! ${syncProgress.result.filesCount} files processed.`);
+    } else {
+      setIsIndexed(false);
+      toast.success(`🎉 Repository ${repository.name} imported successfully! Indexing in progress...`);
+    }
+  };
+  
+  // Ensure state synchronization when GitHub import completes
+  useEffect(() => {
+    if (importedRepository && importedFromGitHub && !storedCodebase) {
+      console.log('🔄 Synchronizing GitHub import state...');
       const githubCodebase: StoredCodebase = {
         metadata: {
-          id: `github_${repository.owner.login}_${repository.name}`,
-          name: repository.fullName,
-          totalFiles: syncProgress.result.filesCount,
-          totalSize: repository.size * 1024, // GitHub size is in KB
-          languages: repository.language ? [repository.language.toLowerCase()] : ['unknown'],
+          id: `github_${importedRepository.owner.login}_${importedRepository.name}`,
+          name: importedRepository.fullName,
+          totalFiles: githubSyncProgress?.result?.filesCount || 0,
+          totalSize: importedRepository.size * 1024,
+          languages: importedRepository.language ? [importedRepository.language.toLowerCase()] : ['unknown'],
           lastProcessed: Date.now(),
           version: '1.0'
         },
-        files: [], // Files are already indexed in Pinecone, no need to store locally
+        files: [],
         searchIndex: {
           byKeyword: {},
           byLanguage: {},
@@ -857,13 +959,23 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
           byFilePath: {}
         }
       };
-
+      
+      console.log('🔄 Setting storedCodebase from useEffect:', githubCodebase.metadata);
       setStoredCodebase(githubCodebase);
       setIsIndexed(true);
-      
-      toast.success(`🎉 Repository ${repository.name} imported and indexed successfully! ${syncProgress.result.filesCount} files processed.`);
     }
-  };
+  }, [importedRepository, importedFromGitHub, githubSyncProgress, storedCodebase]);
+  
+  // Debug effect to log state changes
+  useEffect(() => {
+    console.log('📊 State Update:', {
+      storedCodebase: storedCodebase?.metadata,
+      importedFromGitHub,
+      importedRepository: importedRepository?.fullName,
+      isIndexed,
+      searchMode
+    });
+  }, [storedCodebase, importedFromGitHub, importedRepository, isIndexed, searchMode]);
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-800 p-4 sm:p-6 lg:p-8 ${(isGeneratingPlan || isRefiningPlan) ? 'body-with-ticker' : ''}`}>
@@ -871,6 +983,14 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
       <StreamingProgressTicker 
         progress={planProgress} 
         isVisible={isGeneratingPlan || isRefiningPlan} 
+      />
+      
+      {/* Indexing Progress */}
+      <IndexingProgress 
+        codebaseId={currentCodebaseId || undefined}
+        isVisible={showIndexingProgress}
+        onComplete={handleIndexingComplete}
+        onError={handleIndexingError}
       />
       
       <div className="max-w-4xl mx-auto">
@@ -915,6 +1035,26 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                   onChange={setPrompt}
                   placeholder="Describe what you want to implement in your codebase..."
                 />
+                
+                {/* Queued Prompt Indicator */}
+                {queuedPrompt && (
+                  <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-yellow-300 text-sm">
+                        Prompt queued: &quot;{queuedPrompt.substring(0, 50)}{queuedPrompt.length > 50 ? '...' : ''}&quot; will be processed when indexing completes.
+                      </span>
+                      <button
+                        onClick={() => setQueuedPrompt(null)}
+                        className="text-yellow-400 hover:text-yellow-300 ml-auto"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )}
          
                 {/* Buttons */}
                 <div className="flex justify-center items-center space-x-4 mt-6">
@@ -975,7 +1115,10 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                             </svg>
                             Generating Plan...
                           </>
-                ) : uploadProgress.isUploading ? "Processing Files..." : "Send"}
+                        ) : uploadProgress.isUploading ? "Processing Files..." 
+                        : isIndexing ? (
+                          queuedPrompt ? "Prompt Queued" : "Queue Prompt"
+                        ) : "Send"}
                       </button>
                   </div>
                 </div>
@@ -991,11 +1134,28 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                   </p>
                 </div>
                 
-                <SemanticSearch
-                  codebaseId={storedCodebase?.metadata.id || ''}
-                  onResultsFound={handleSemanticSearchResults}
-                  className="w-full"
-                />
+                {/* Debug logging */}
+                {console.log('🔍 SemanticSearch Debug:', { 
+                  storedCodebase: storedCodebase?.metadata, 
+                  hasId: !!storedCodebase?.metadata.id,
+                  id: storedCodebase?.metadata.id,
+                  importedFromGitHub,
+                  isIndexed
+                })}
+                
+                {storedCodebase?.metadata.id ? (
+                  <SemanticSearch
+                    codebaseId={storedCodebase.metadata.id}
+                    onResultsFound={handleSemanticSearchResults}
+                    className="w-full"
+                  />
+                ) : (
+                  <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
+                    <p className="text-yellow-300 text-center">
+                      📚 Please upload files or import a repository first to enable semantic search.
+                    </p>
+                  </div>
+                )}
               </div>
             </>
           )}

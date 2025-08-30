@@ -44,6 +44,41 @@ export class SimilaritySearchService {
   private chunker: SemanticChunker;
   private embeddingService: VectorEmbeddingService;
   private pineconeService: PineconeService;
+  
+  /**
+   * Update indexing progress via API (only works on client-side)
+   */
+  private async updateProgress(codebaseId: string, update: {
+    status?: 'idle' | 'chunking' | 'embedding' | 'storing' | 'completed' | 'error';
+    phase?: string;
+    progress?: number;
+    message?: string;
+    chunksProcessed?: number;
+    totalChunks?: number;
+    errors?: string[];
+  }): Promise<void> {
+    // Skip progress updates on server-side (when there's no window object)
+    if (typeof window === 'undefined') {
+      console.log(`📊 Indexing progress: ${update.progress}% - ${update.message}`);
+      return;
+    }
+    
+    try {
+      const baseUrl = window.location.origin;
+      await fetch(`${baseUrl}/api/indexing-progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          codebaseId,
+          ...update
+        })
+      });
+    } catch (error) {
+      console.error('Failed to update indexing progress:', error);
+    }
+  }
 
   constructor(
     openAiApiKey?: string,
@@ -57,8 +92,12 @@ export class SimilaritySearchService {
       includeComments: true
     });
 
-    this.embeddingService = new VectorEmbeddingService(openAiApiKey);
-    this.pineconeService = new PineconeService(pineconeApiKey, pineconeEnvironment);
+    // VectorEmbeddingService now uses Voyage AI, so we don't pass the OpenAI key
+    this.embeddingService = new VectorEmbeddingService();
+    
+    // Get the embedding dimension from the service and pass it to Pinecone
+    const embeddingDimension = this.embeddingService.getExpectedDimension();
+    this.pineconeService = new PineconeService(pineconeApiKey, pineconeEnvironment, 'traycer-codebase-vectors', embeddingDimension);
   }
 
   /**
@@ -89,6 +128,17 @@ export class SimilaritySearchService {
 
     console.log(`🔍 Starting codebase indexing for codebase: ${codebaseId}`);
     console.log(`📁 Processing ${codebaseFiles.length} files...`);
+
+    // Initialize progress tracking
+    await this.updateProgress(codebaseId, {
+      status: 'chunking',
+      phase: 'chunking',
+      progress: 0,
+      message: 'Starting semantic chunking...',
+      chunksProcessed: 0,
+      totalChunks: 0,
+      errors: []
+    });
 
     onProgress?.({
       phase: 'chunking',
@@ -142,6 +192,17 @@ export class SimilaritySearchService {
 
     console.log(`📊 Phase 1 complete: Generated ${allChunks.length} total chunks`);
 
+    // Update progress after chunking
+    await this.updateProgress(codebaseId, {
+      status: 'embedding',
+      phase: 'embedding',
+      progress: 20,
+      message: 'Starting vector embedding generation...',
+      chunksProcessed: 0,
+      totalChunks: allChunks.length,
+      errors
+    });
+
     // Phase 2: Generate Embeddings
     onProgress?.({
       phase: 'embedding',
@@ -168,7 +229,7 @@ export class SimilaritySearchService {
         }
         
         // Process each batch
-        let allEmbeddings = [];
+        const allEmbeddings = [];
         let totalTokens = 0;
         
         for (let i = 0; i < batches.length; i++) {
@@ -178,11 +239,25 @@ export class SimilaritySearchService {
             allEmbeddings.push(...batchResult.embeddings);
             totalTokens += batchResult.totalTokens;
             
+            const currentProgress = 20 + Math.floor((i+1) / batches.length * 60);
+            const chunksProcessed = Math.min(allChunks.length, (i+1) * batchSize);
+            
+            // Update API progress
+            await this.updateProgress(codebaseId, {
+              status: 'embedding',
+              phase: 'embedding',
+              progress: currentProgress,
+              message: `Generated embeddings for batch ${i+1}/${batches.length}`,
+              chunksProcessed,
+              totalChunks: allChunks.length,
+              errors
+            });
+            
             onProgress?.({ 
               phase: 'embedding', 
-              progress: 20 + Math.floor((i+1) / batches.length * 60),
+              progress: currentProgress,
               message: `Generated embeddings for batch ${i+1}/${batches.length}`,
-              chunksProcessed: Math.min(allChunks.length, (i+1) * batchSize),
+              chunksProcessed,
               totalChunks: allChunks.length,
               errors
             });
@@ -227,6 +302,17 @@ export class SimilaritySearchService {
       console.error('❌', errorMsg);
       errors.push(errorMsg);
       
+      // Update progress with error
+      await this.updateProgress(codebaseId, {
+        status: 'error',
+        phase: 'embedding',
+        progress: 50,
+        message: 'Error during embedding generation',
+        chunksProcessed: embeddingBatch?.embeddings?.length || 0,
+        totalChunks: allChunks.length,
+        errors
+      });
+      
       // Don't completely fail if we have partial results
       if (embeddingBatch && embeddingBatch.embeddings && embeddingBatch.embeddings.length > 0) {
         console.log(`🔄 Continuing with partial embeddings: ${embeddingBatch.embeddings.length} out of ${allChunks.length}`);
@@ -236,6 +322,16 @@ export class SimilaritySearchService {
     }
 
     // Phase 3: Store in Pinecone
+    await this.updateProgress(codebaseId, {
+      status: 'storing',
+      phase: 'storing',
+      progress: 80,
+      message: 'Storing vectors in Pinecone...',
+      chunksProcessed: embeddingBatch.embeddings.length,
+      totalChunks: allChunks.length,
+      errors
+    });
+    
     onProgress?.({
       phase: 'storing',
       progress: 0,
@@ -270,11 +366,34 @@ export class SimilaritySearchService {
       const errorMsg = `Error storing in Pinecone: ${error instanceof Error ? error.message : 'Unknown error'}`;
       console.error('❌', errorMsg);
       errors.push(errorMsg);
+      
+      // Update progress with error
+      await this.updateProgress(codebaseId, {
+        status: 'error',
+        phase: 'storing',
+        progress: 85,
+        message: 'Error storing vectors in Pinecone',
+        chunksProcessed: embeddingBatch?.embeddings?.length || 0,
+        totalChunks: allChunks.length,
+        errors
+      });
+      
       throw new Error(errorMsg);
     }
 
     const indexingTime = Date.now() - startTime;
 
+    // Final progress update
+    await this.updateProgress(codebaseId, {
+      status: 'completed',
+      phase: 'complete',
+      progress: 100,
+      message: `Indexing complete! ${allChunks.length} chunks indexed in ${Math.round(indexingTime / 1000)}s`,
+      chunksProcessed: allChunks.length,
+      totalChunks: allChunks.length,
+      errors
+    });
+    
     onProgress?.({
       phase: 'complete',
       progress: 100,

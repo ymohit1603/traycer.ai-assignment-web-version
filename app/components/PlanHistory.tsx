@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { PlanHistoryService, SavedPlan, PlanComparison } from "../lib/planHistory";
-import { GeneratedPlan } from "../lib/openAIService";
 
 interface PlanHistoryProps {
   onPlanSelect: (plan: SavedPlan) => void;
@@ -40,9 +39,9 @@ export default function PlanHistory({
       loadPlans();
       setStatistics(PlanHistoryService.getPlanStatistics());
     }
-  }, [isOpen, selectedFilter]);
+  }, [isOpen, selectedFilter, loadPlans]);
 
-  const loadPlans = () => {
+  const loadPlans = useCallback(() => {
     let loadedPlans: SavedPlan[] = [];
 
     switch (selectedFilter) {
@@ -64,7 +63,7 @@ export default function PlanHistory({
     }
 
     setPlans(loadedPlans);
-  };
+  }, [selectedFilter, searchQuery, currentCodebaseId]);
 
   const handleToggleFavorite = async (planId: string) => {
     const plan = plans.find(p => p.id === planId);
@@ -244,7 +243,7 @@ export default function PlanHistory({
 
             <select
               value={selectedFilter}
-              onChange={(e) => setSelectedFilter(e.target.value as any)}
+              onChange={(e) => setSelectedFilter(e.target.value as 'all' | 'favorites' | 'recent' | 'current-codebase')}
               className="px-3 py-2 border border-gray-700 bg-gray-900 text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
             >
               <option value="all">All Plans</option>

@@ -30,7 +30,7 @@ export default function WebhookStatus({ repositoryFullName, webhookId, className
       
       return () => clearInterval(interval);
     }
-  }, [webhookId]);
+  }, [webhookId, checkWebhookActivity]);
 
   const checkWebhookActivity = async () => {
     try {

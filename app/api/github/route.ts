@@ -167,16 +167,34 @@ export async function POST(request: NextRequest) {
 
               console.log('🔧 Setting up webhook...');
               const webhookUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/github/webhook`;
-              webhookInfo = await githubService.setupWebhook(owner, repo, webhookUrl);
-
-              console.log(`✅ Webhook setup successful: ${webhookInfo.webhookId}`);
-              syncProgress.set(progressId, {
-                ...syncProgress.get(progressId),
-                progress: 90,
-                message: '🔗 Webhook configured successfully'
-              });
+              
+              // Skip webhook setup for localhost development
+              if (webhookUrl.includes('localhost') || webhookUrl.includes('127.0.0.1')) {
+                console.log('⚠️ Skipping webhook setup for localhost development environment');
+                syncProgress.set(progressId, {
+                  ...syncProgress.get(progressId),
+                  progress: 90,
+                  message: '⚠️ Webhook skipped (localhost development)'
+                });
+              } else {
+                webhookInfo = await githubService.setupWebhook(owner, repo, webhookUrl);
+                console.log(`✅ Webhook setup successful: ${webhookInfo.webhookId}`);
+                syncProgress.set(progressId, {
+                  ...syncProgress.get(progressId),
+                  progress: 90,
+                  message: '🔗 Webhook configured successfully'
+                });
+              }
             } catch (webhookError) {
-              console.warn(`⚠️ Webhook setup failed (continuing without webhook):`, webhookError);
+              const isLocalhostError = webhookError instanceof Error && 
+                (webhookError.message.includes('localhost') || 
+                 webhookError.message.includes('public Internet'));
+              
+              if (isLocalhostError) {
+                console.log('⚠️ Webhook setup skipped - localhost not accessible from GitHub');
+              } else {
+                console.warn(`⚠️ Webhook setup failed (continuing without webhook):`, webhookError);
+              }
               syncProgress.set(progressId, {
                 ...syncProgress.get(progressId),
                 progress: 90,

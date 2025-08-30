@@ -241,7 +241,7 @@ export async function GET(request: NextRequest) {
           const isIndexed = chunks && chunks.length > 0;
           
           // Get more detailed stats if indexed
-          let stats = { totalVectors: chunks.length };
+          const stats = { totalVectors: chunks.length };
           if (isIndexed) {
             console.log(`Found ${chunks.length} chunks for codebase ${codebaseId}`);
           }

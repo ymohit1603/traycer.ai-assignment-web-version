@@ -266,7 +266,7 @@ export default function SemanticSearchResults({ results, onClose }: SemanticSear
           <div className="space-y-3">
             {results.searchResults.chunks
               .sort((a, b) => b.score - a.score)
-              .map((chunk, index) => (
+              .map((chunk) => (
                 <div key={chunk.chunkId} className="bg-gray-700 rounded-lg border border-gray-600">
                   <div 
                     className="p-4 cursor-pointer hover:bg-gray-600 transition-colors"

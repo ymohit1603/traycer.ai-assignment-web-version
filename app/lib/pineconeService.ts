@@ -54,13 +54,14 @@ export type ProgressCallback = (progress: UpsertProgress) => void;
 export class PineconeService {
   private pinecone: Pinecone;
   private indexName: string;
-  private dimension: number = 1536; // text-embedding-3-small dimension
+  private dimension: number = 1024; // Voyage AI embedding dimension
   private batchSize: number = 100; // Pinecone batch upsert limit
 
   constructor(
     apiKey?: string, 
     environment?: string, 
-    indexName: string = 'traycer-codebase-vectors'
+    indexName: string = 'traycer-codebase-vectors',
+    dimension?: number
   ) {
     const key = apiKey || process.env.PINECONE_API_KEY;
     
@@ -73,6 +74,12 @@ export class PineconeService {
     });
 
     this.indexName = indexName;
+    
+    // Update dimension if provided
+    if (dimension) {
+      this.dimension = dimension;
+      console.log(`📏 Pinecone dimension set to: ${this.dimension}`);
+    }
   }
 
   /**
@@ -87,8 +94,36 @@ export class PineconeService {
       const existingIndex = indexList.indexes?.find(idx => idx.name === this.indexName);
 
       if (existingIndex) {
-        console.log(`✅ Index ${this.indexName} already exists`);
-        return;
+        // Check if dimensions match
+        try {
+          const indexInfo = await this.pinecone.describeIndex(this.indexName);
+          const indexDimension = indexInfo.dimension;
+          
+          if (indexDimension !== this.dimension) {
+            console.warn(`⚠️ Dimension mismatch: Index has ${indexDimension}, but we need ${this.dimension}`);
+            console.log(`🗑️ Deleting existing index to recreate with correct dimensions...`);
+            
+            await this.pinecone.deleteIndex(this.indexName);
+            console.log(`✅ Deleted existing index: ${this.indexName}`);
+            
+            // Wait a moment for deletion to complete
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Will create new index below
+          } else {
+            console.log(`✅ Index ${this.indexName} already exists with correct dimensions (${indexDimension})`);
+            return;
+          }
+        } catch (describeError) {
+          console.warn(`⚠️ Could not describe existing index, proceeding to recreate:`, describeError);
+          
+          try {
+            await this.pinecone.deleteIndex(this.indexName);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } catch (deleteError) {
+            console.warn(`⚠️ Could not delete existing index:`, deleteError);
+          }
+        }
       }
 
       // Create index if it doesn't exist
@@ -147,6 +182,18 @@ export class PineconeService {
     onProgress?: ProgressCallback
   ): Promise<void> {
     console.log(`🚀 Storing ${chunks.length} chunks in Pinecone...`);
+
+    // Validate embedding dimensions
+    if (embeddings.length > 0) {
+      const firstEmbedding = embeddings[0].embedding;
+      if (firstEmbedding.length !== this.dimension) {
+        throw new Error(
+          `Embedding dimension mismatch: Expected ${this.dimension}, got ${firstEmbedding.length}. ` +
+          `Please ensure your embedding service and Pinecone index use the same dimensions.`
+        );
+      }
+      console.log(`✅ Embedding dimensions validated: ${firstEmbedding.length}`);
+    }
 
     const index = this.pinecone.index(this.indexName);
     
@@ -464,7 +511,7 @@ export class PineconeService {
     keywords?: string[];
     topK?: number;
   }): Promise<SearchResult[]> {
-    const filters: Record<string, any> = {};
+    const filters: Record<string, unknown> = {};
 
     // Build filters
     if (options.codebaseId) {

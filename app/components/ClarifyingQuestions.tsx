@@ -3,9 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   ClarifyingQuestion, 
-  QuestionResponse, 
-  ClarificationSession,
-  ClarifyingQuestionsService 
+  ClarificationSession
 } from "../lib/clarifyingQuestions";
 
 interface ClarifyingQuestionsProps {
@@ -60,7 +58,7 @@ export default function ClarifyingQuestions({
 
   const handleComplete = () => {
     // Convert responses to QuestionResponse array and trigger refinement
-    const finalResponses: QuestionResponse[] = Object.entries(responses).map(([questionId, answer]) => ({
+    Object.entries(responses).map(([questionId, answer]) => ({
       questionId,
       answer,
     }));

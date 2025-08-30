@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
-import FileReadingIndicator, { useFileReadingProgress, FileReadStatus } from './FileReadingIndicator';
+import FileReadingIndicator, { useFileReadingProgress } from './FileReadingIndicator';
 
 export interface SemanticSearchResult {
   success: boolean;
@@ -92,16 +92,7 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
     resetProgress
   } = useFileReadingProgress();
 
-  // Check if codebase is indexed on mount
-  useEffect(() => {
-    if (codebaseId) {
-      checkIndexStatus();
-    } else {
-      setIndexStatus('not-indexed');
-    }
-  }, [codebaseId]);
-
-  const checkIndexStatus = async () => {
+  const checkIndexStatus = useCallback(async () => {
     try {
       const response = await fetch(`/api/semantic-index?action=status&codebaseId=${codebaseId}`);
       const data = await response.json();
@@ -113,15 +104,30 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
       console.error('Error checking index status:', error);
       setIndexStatus('not-indexed');
     }
-  };
+  }, [codebaseId]);
+
+  // Check if codebase is indexed on mount
+  useEffect(() => {
+    if (codebaseId) {
+      checkIndexStatus();
+    } else {
+      setIndexStatus('not-indexed');
+    }
+  }, [codebaseId, checkIndexStatus]);
 
   const indexCodebase = async () => {
     if (isIndexing) return;
     
+    if (!codebaseId || codebaseId.trim() === '') {
+      console.error('❌ No codebase ID provided for indexing');
+      toast.error('No codebase selected for indexing. Please upload files or import from GitHub first.');
+      return;
+    }
+    
     setIsIndexing(true);
     
     try {
-      console.log('🚀 Starting codebase indexing...');
+      console.log(`🚀 Starting codebase indexing for: ${codebaseId}`);
       
       // Initialize search service
       const initResponse = await fetch('/api/semantic-index', {

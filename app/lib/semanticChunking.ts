@@ -1,5 +1,5 @@
 import { parse } from '@babel/parser';
-import traverse from '@babel/traverse';
+import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import crypto from 'crypto-js';
 
@@ -77,32 +77,67 @@ export class SemanticChunker {
    */
   private async chunkJavaScriptTypeScript(filePath: string, content: string, language: string): Promise<CodeChunk[]> {
     const chunks: CodeChunk[] = [];
-    const lines = content.split('\n');
     
     try {
-      // Parse with appropriate settings for TypeScript/JSX
-      const ast = parse(content, {
+      // Determine plugins based on file type and extension
+      const isTypeScript = language === 'typescript' || language === 'tsx' || filePath.endsWith('.ts') || filePath.endsWith('.tsx');
+      const isJSX = language === 'jsx' || language === 'tsx' || filePath.endsWith('.jsx') || filePath.endsWith('.tsx');
+      
+      const plugins: string[] = [
+        'decorators-legacy',
+        'classProperties',
+        'objectRestSpread',
+        'asyncGenerators',
+        'functionBind',
+        'exportDefaultFrom',
+        'exportNamespaceFrom',
+        'dynamicImport',
+        'nullishCoalescingOperator',
+        'optionalChaining',
+        'importMeta',
+        'topLevelAwait',
+        'optionalCatchBinding',
+        'privateIn', // For private fields
+        'logicalAssignment' // For ||= &&= ??= operators
+      ];
+      
+      // Add TypeScript support first if needed
+      if (isTypeScript) {
+        plugins.push('typescript');
+      }
+      
+      // Add JSX support after TypeScript for .tsx files
+      if (isJSX) {
+        plugins.push('jsx');
+      }
+      
+      // Special handling for .tsx files
+      const parserOptions: {
+        sourceType: 'module';
+        allowImportExportEverywhere: boolean;
+        allowReturnOutsideFunction: boolean;
+        strictMode: boolean;
+        allowUndeclaredExports: boolean;
+        errorRecovery: boolean;
+        plugins: (string | [string, object])[];
+      } = {
         sourceType: 'module',
         allowImportExportEverywhere: true,
         allowReturnOutsideFunction: true,
-        plugins: [
-          'typescript',
-          'jsx',
-          'decorators-legacy',
-          'classProperties',
-          'objectRestSpread',
-          'asyncGenerators',
-          'functionBind',
-          'exportDefaultFrom',
-          'exportNamespaceFrom',
-          'dynamicImport',
-          'nullishCoalescingOperator',
-          'optionalChaining',
-          'importMeta',
-          'topLevelAwait',
-          'optionalCatchBinding'
-        ]
-      });
+        strictMode: false,
+        allowUndeclaredExports: true,
+        errorRecovery: true, // Continue parsing despite errors
+        plugins
+      };
+      
+      // For TSX files, we need to specify TypeScript with JSX
+      if (filePath.endsWith('.tsx')) {
+        parserOptions.plugins = plugins.filter(p => p !== 'jsx'); // Remove jsx
+        parserOptions.plugins.push(['typescript', { jsx: true }]); // Add typescript with JSX
+      }
+      
+      // Parse with appropriate settings for TypeScript/JSX
+      const ast = parse(content, parserOptions);
 
       // Collect imports and exports first
       const imports: string[] = [];
@@ -110,7 +145,7 @@ export class SemanticChunker {
 
       traverse(ast, {
         // Collect imports
-        ImportDeclaration(path) {
+        ImportDeclaration: (path) => {
           const importStr = this.getNodeContent(content, path.node);
           imports.push(path.node.source.value);
           
@@ -129,9 +164,9 @@ export class SemanticChunker {
             }
           ));
         },
-
+      
         // Collect exports
-        ExportDeclaration(path) {
+        ExportDeclaration: (path) => {
           const exportStr = this.getNodeContent(content, path.node);
           
           if (t.isExportNamedDeclaration(path.node)) {
@@ -141,7 +176,7 @@ export class SemanticChunker {
               } else if (t.isClassDeclaration(path.node.declaration)) {
                 exports.push(path.node.declaration.id?.name || 'anonymous');
               } else if (t.isVariableDeclaration(path.node.declaration)) {
-                path.node.declaration.declarations.forEach(decl => {
+                path.node.declaration.declarations.forEach((decl) => {
                   if (t.isIdentifier(decl.id)) {
                     exports.push(decl.id.name);
                   }
@@ -151,7 +186,7 @@ export class SemanticChunker {
           } else if (t.isExportDefaultDeclaration(path.node)) {
             exports.push('default');
           }
-
+      
           chunks.push(this.createChunk(
             exportStr,
             'export',
@@ -167,18 +202,18 @@ export class SemanticChunker {
             }
           ));
         },
-
+      
         // Functions (including arrow functions and methods)
-        FunctionDeclaration(path) {
+        FunctionDeclaration: (path) => {
           if (path.parent.type === 'Program') { // Top-level functions only
             this.processFunctionDeclaration(path, content, chunks, filePath, language, imports, exports);
           }
         },
-
+      
         // Arrow functions assigned to variables
-        VariableDeclaration(path) {
+        VariableDeclaration: (path) => {
           if (path.parent.type === 'Program') {
-            path.node.declarations.forEach(declaration => {
+            path.node.declarations.forEach((declaration) => {
               if (t.isArrowFunctionExpression(declaration.init) || 
                   t.isFunctionExpression(declaration.init)) {
                 const funcContent = this.getNodeContent(content, path.node);
@@ -223,16 +258,16 @@ export class SemanticChunker {
             });
           }
         },
-
+      
         // Classes
-        ClassDeclaration(path) {
+        ClassDeclaration: (path) => {
           if (path.parent.type === 'Program') {
             this.processClassDeclaration(path, content, chunks, filePath, language, imports, exports);
           }
         },
-
+      
         // Interfaces (TypeScript)
-        TSInterfaceDeclaration(path) {
+        TSInterfaceDeclaration: (path) => {
           const interfaceContent = this.getNodeContent(content, path.node);
           const interfaceName = path.node.id.name;
           
@@ -252,9 +287,9 @@ export class SemanticChunker {
             interfaceName
           ));
         },
-
+      
         // Type aliases (TypeScript)
-        TSTypeAliasDeclaration(path) {
+        TSTypeAliasDeclaration: (path) => {
           const typeContent = this.getNodeContent(content, path.node);
           const typeName = path.node.id.name;
           
@@ -283,7 +318,7 @@ export class SemanticChunker {
     }
   }
 
-  private processFunctionDeclaration(path: traverse.NodePath<t.FunctionDeclaration>, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
+  private processFunctionDeclaration(path: NodePath<t.FunctionDeclaration>, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
     const funcContent = this.getNodeContent(content, path.node);
     const funcName = path.node.id?.name || 'anonymous';
     
@@ -304,7 +339,7 @@ export class SemanticChunker {
     ));
   }
 
-  private processClassDeclaration(path: traverse.NodePath<t.ClassDeclaration>, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
+  private processClassDeclaration(path: NodePath<t.ClassDeclaration>, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
     const classContent = this.getNodeContent(content, path.node);
     const className = path.node.id?.name || 'anonymous';
     
@@ -327,8 +362,8 @@ export class SemanticChunker {
     chunks.push(classChunk);
 
     // Process class methods as separate chunks
-    path.node.body.body.forEach((node: t.Statement) => {
-      if (t.isMethodDefinition(node) || t.isClassMethod(node)) {
+    path.node.body.body.forEach((node) => {
+      if (t.isClassMethod(node)) {
         const methodContent = this.getNodeContent(content, node);
         const methodName = t.isIdentifier(node.key) ? node.key.name : 'anonymous';
         

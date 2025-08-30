@@ -58,7 +58,7 @@ export interface PlanGenerationProgress {
   message: string;
   toolCall?: {
     name: string;
-    args: Record<string, any>;
+    args: Record<string, unknown>;
   };
 }
 
@@ -472,7 +472,7 @@ export class OpenAIService {
     }
   }
 
-  private extractProgressFromContent(content: string): { message: string; currentFile?: string; toolCall?: {name: string, args: Record<string, any>} } {
+  private extractProgressFromContent(content: string): { message: string; currentFile?: string; toolCall?: {name: string, args: Record<string, unknown>} } {
     // Extract meaningful progress information from the AI's response
     if (content.includes('**Observations**') && !content.includes('**Approach**')) {
       return { 

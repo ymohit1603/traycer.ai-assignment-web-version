@@ -69,39 +69,39 @@ export default function FileReadingIndicator({
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'queued':
-        return '⏳';
-      case 'reading':
-        return '📖';
-      case 'processing':
-        return '⚙️';
-      case 'complete':
-        return '✅';
-      case 'error':
-        return '❌';
-      default:
-        return '⚙️';
-    }
-  };
+  // const getStatusIcon = (status: string) => {
+  //   switch (status) {
+  //     case 'queued':
+  //       return '⏳';
+  //     case 'reading':
+  //       return '📖';
+  //     case 'processing':
+  //       return '⚙️';
+  //     case 'complete':
+  //       return '✅';
+  //     case 'error':
+  //       return '❌';
+  //     default:
+  //       return '⚙️';
+  //   }
+  // };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'queued':
-        return 'text-gray-400';
-      case 'reading':
-        return 'text-blue-400';
-      case 'processing':
-        return 'text-yellow-400';
-      case 'complete':
-        return 'text-green-400';
-      case 'error':
-        return 'text-red-400';
-      default:
-        return 'text-gray-400';
-    }
-  };
+  // const getStatusColor = (status: string) => {
+  //   switch (status) {
+  //     case 'queued':
+  //       return 'text-gray-400';
+  //     case 'reading':
+  //       return 'text-blue-400';
+  //     case 'processing':
+  //       return 'text-yellow-400';
+  //     case 'complete':
+  //       return 'text-green-400';
+  //     case 'error':
+  //       return 'text-red-400';
+  //     default:
+  //       return 'text-gray-400';
+  //   }
+  // };
 
   const visibleActiveFiles = progress.activeFiles.slice(0, maxVisibleFiles);
   const hiddenActiveFiles = progress.activeFiles.length - visibleActiveFiles.length;
@@ -188,7 +188,7 @@ export default function FileReadingIndicator({
                   Processing Files ({progress.activeFiles.length})
                 </h4>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {visibleActiveFiles.map((file, index) => (
+                  {visibleActiveFiles.map((file) => (
                     <FileStatusItem key={file.filePath} file={file} />
                   ))}
                   
@@ -208,7 +208,7 @@ export default function FileReadingIndicator({
                   Recently Completed ({completedCount} total)
                 </h4>
                 <div className="space-y-1">
-                  {recentCompletedFiles.map((file, index) => (
+                  {recentCompletedFiles.map((file) => (
                     <CompletedFileItem key={file.filePath} file={file} />
                   ))}
                 </div>
