@@ -27,6 +27,7 @@ interface SyncProgressData {
   totalFiles?: number;
   errors?: string[];
   result?: SyncResult;
+  currentFile?: string;
 }
 
 // Store sync progress for streaming updates
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
           }
         ).then(async (syncResult) => {
           // After sync, index the repository in the semantic search
+          let webhookInfo: any = null;
           try {
             const searchService = new SimilaritySearchService(
               process.env.OPEN_AI_API || process.env.NEXT_PUBLIC_OPEN_AI_API,
@@ -156,7 +158,6 @@ export async function POST(request: NextRequest) {
             console.log('✅ Indexing completed successfully');
 
             // Set up webhook for automatic updates
-            let webhookInfo = null;
             try {
               syncProgress.set(progressId, {
                 ...syncProgress.get(progressId),
@@ -171,16 +172,20 @@ export async function POST(request: NextRequest) {
               // Skip webhook setup for localhost development
               if (webhookUrl.includes('localhost') || webhookUrl.includes('127.0.0.1')) {
                 console.log('⚠️ Skipping webhook setup for localhost development environment');
+                const currentProgress = syncProgress.get(progressId);
                 syncProgress.set(progressId, {
-                  ...syncProgress.get(progressId),
+                  ...currentProgress,
+                  phase: 'indexing',
                   progress: 90,
                   message: '⚠️ Webhook skipped (localhost development)'
                 });
               } else {
                 webhookInfo = await githubService.setupWebhook(owner, repo, webhookUrl);
                 console.log(`✅ Webhook setup successful: ${webhookInfo.webhookId}`);
+                const currentProgress = syncProgress.get(progressId);
                 syncProgress.set(progressId, {
-                  ...syncProgress.get(progressId),
+                  ...currentProgress,
+                  phase: 'indexing',
                   progress: 90,
                   message: '🔗 Webhook configured successfully'
                 });
@@ -195,8 +200,10 @@ export async function POST(request: NextRequest) {
               } else {
                 console.warn(`⚠️ Webhook setup failed (continuing without webhook):`, webhookError);
               }
+              const currentProgress = syncProgress.get(progressId);
               syncProgress.set(progressId, {
-                ...syncProgress.get(progressId),
+                ...currentProgress,
+                phase: 'indexing',
                 progress: 90,
                 message: '⚠️ Webhook setup skipped (manual sync available)'
               });
@@ -205,10 +212,17 @@ export async function POST(request: NextRequest) {
             // Store repository sync data
             const repositoryInfo = {
               id: Date.now(), // This would be the GitHub repository ID in a real implementation
-              full_name: `${owner}/${repo}`,
               name: repo,
-              owner: { login: owner },
-              default_branch: branch || 'main'
+              fullName: `${owner}/${repo}`,
+              description: undefined,
+              private: false, // Default assumption, should be fetched from GitHub API
+              language: undefined,
+              size: 0, // Should be fetched from GitHub API
+              updatedAt: new Date().toISOString(),
+              defaultBranch: branch || 'main',
+              cloneUrl: `https://github.com/${owner}/${repo}.git`,
+              htmlUrl: `https://github.com/${owner}/${repo}`,
+              owner: { login: owner, avatarUrl: '' }
             };
 
             const syncData = RepositoryStorageService.createRepositorySyncData(

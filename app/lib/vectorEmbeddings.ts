@@ -313,6 +313,9 @@ export class VectorEmbeddingService {
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
+    
+    // This should never be reached, but TypeScript requires it
+    throw new Error(`Failed to generate embedding for chunk ${chunk.id} after ${this.maxRetries} attempts`);
   }
 
   /**

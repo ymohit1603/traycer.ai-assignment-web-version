@@ -1091,13 +1091,13 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
     // Generate overview for new project
     const codebaseOverview = `New ${requirements.projectType} project using ${languages.join(', ')}`;
     
-    const keyComponents = [
+    const keyComponents: string[] = [
       ...languages,
       ...dependencies.slice(0, 10),
       requirements.database,
       requirements.authentication,
       requirements.deployment
-    ].filter(Boolean);
+    ].filter(Boolean) as string[];
 
     return {
       codebaseOverview,

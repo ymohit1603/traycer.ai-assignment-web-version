@@ -345,7 +345,7 @@ export default function IntegrationExamples({ plan, onClose, isOpen }: Integrati
             <span className="text-sm font-medium text-gray-700">Export Format:</span>
             <select
               value={exportFormat}
-              onChange={(e) => setExportFormat(e.target.value)}
+              onChange={(e) => setExportFormat(e.target.value as 'markdown' | 'json' | 'text')}
               className="px-3 py-1 border border-gray-300 rounded-lg text-sm"
             >
               <option value="markdown">Markdown</option>

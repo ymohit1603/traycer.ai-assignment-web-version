@@ -22,16 +22,6 @@ export default function WebhookStatus({ repositoryFullName, webhookId, className
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  useEffect(() => {
-    if (webhookId) {
-      // Poll for webhook activity
-      const interval = setInterval(checkWebhookActivity, 5000); // Check every 5 seconds
-      checkWebhookActivity(); // Initial check
-      
-      return () => clearInterval(interval);
-    }
-  }, [webhookId, checkWebhookActivity]);
-
   const checkWebhookActivity = async () => {
     try {
       const response = await fetch('/api/github/webhook?action=queue');
@@ -53,6 +43,16 @@ export default function WebhookStatus({ repositoryFullName, webhookId, className
       console.error('Error checking webhook activity:', error);
     }
   };
+
+  useEffect(() => {
+    if (webhookId) {
+      // Poll for webhook activity
+      const interval = setInterval(checkWebhookActivity, 5000); // Check every 5 seconds
+      checkWebhookActivity(); // Initial check
+      
+      return () => clearInterval(interval);
+    }
+  }, [webhookId, checkWebhookActivity]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {

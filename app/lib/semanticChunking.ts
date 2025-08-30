@@ -83,7 +83,7 @@ export class SemanticChunker {
       const isTypeScript = language === 'typescript' || language === 'tsx' || filePath.endsWith('.ts') || filePath.endsWith('.tsx');
       const isJSX = language === 'jsx' || language === 'tsx' || filePath.endsWith('.jsx') || filePath.endsWith('.tsx');
       
-      const plugins: string[] = [
+      const plugins: (string | [string, object])[] = [
         'decorators-legacy',
         'classProperties',
         'objectRestSpread',
@@ -137,7 +137,7 @@ export class SemanticChunker {
       }
       
       // Parse with appropriate settings for TypeScript/JSX
-      const ast = parse(content, parserOptions);
+      const ast = parse(content, parserOptions as any);
 
       // Collect imports and exports first
       const imports: string[] = [];

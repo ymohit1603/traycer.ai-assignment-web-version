@@ -89,7 +89,7 @@ export class GitHubService {
         private: repo.private,
         language: repo.language || undefined,
         size: repo.size,
-        updatedAt: repo.updated_at,
+        updatedAt: repo.updated_at || new Date().toISOString(),
         defaultBranch: repo.default_branch,
         cloneUrl: repo.clone_url,
         htmlUrl: repo.html_url,

@@ -299,7 +299,7 @@ async function handlePushEvent(payload: GitHubPushPayload, deliveryId: string): 
         added: commit.added || [],
         modified: commit.modified || [],
         removed: commit.removed || [],
-        timestamp: commit.timestamp
+        timestamp: commit.timestamp || new Date().toISOString()
       })),
       ref,
       before,
@@ -308,7 +308,15 @@ async function handlePushEvent(payload: GitHubPushPayload, deliveryId: string): 
       created: payload.created || false,
       deleted: payload.deleted || false,
       compare: payload.compare,
-      headCommit: payload.head_commit,
+      headCommit: payload.head_commit ? {
+        ...payload.head_commit,
+        timestamp: payload.head_commit.timestamp || new Date().toISOString()
+      } : {
+        id: commits[commits.length - 1]?.id || 'unknown',
+        message: commits[commits.length - 1]?.message || 'No commit message',
+        author: commits[commits.length - 1]?.author || { name: 'Unknown', email: 'unknown@unknown.com' },
+        timestamp: commits[commits.length - 1]?.timestamp || new Date().toISOString()
+      },
       pusher: payload.pusher,
       timestamp: Date.now()
     };

@@ -34,13 +34,6 @@ export default function PlanHistory({
     storageUsed: { used: number; total: number; percentage: number };
   } | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadPlans();
-      setStatistics(PlanHistoryService.getPlanStatistics());
-    }
-  }, [isOpen, selectedFilter, loadPlans]);
-
   const loadPlans = useCallback(() => {
     let loadedPlans: SavedPlan[] = [];
 
@@ -64,6 +57,13 @@ export default function PlanHistory({
 
     setPlans(loadedPlans);
   }, [selectedFilter, searchQuery, currentCodebaseId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadPlans();
+      setStatistics(PlanHistoryService.getPlanStatistics());
+    }
+  }, [isOpen, selectedFilter, loadPlans]);
 
   const handleToggleFavorite = async (planId: string) => {
     const plan = plans.find(p => p.id === planId);

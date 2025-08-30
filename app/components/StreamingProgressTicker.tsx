@@ -21,7 +21,7 @@ export default function StreamingProgressTicker({ progress, isVisible }: Streami
             lastTool.name !== progress.toolCall?.name || 
             lastTool.file !== progress.currentFile) {
           return [...prev.slice(-3), { 
-            name: progress.toolCall.name, 
+            name: progress.toolCall?.name || 'Unknown Tool', 
             file: progress.currentFile 
           }];
         }

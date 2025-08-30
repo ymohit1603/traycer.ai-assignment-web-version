@@ -360,7 +360,7 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
       {/* File Reading Indicator */}
       <FileReadingIndicator
         isVisible={showFileReading}
-        progress={readingProgress}
+        progress={readingProgress || undefined}
         onClose={hideProgress}
       />
 

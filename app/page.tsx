@@ -637,7 +637,6 @@ Generate a complete project plan including:
         {
           projectType: 'web-application', // default
           techStack: [], // Let AI decide
-          features: [],
           database: '',
           authentication: '',
           deployment: ''
@@ -1134,14 +1133,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                   </p>
                 </div>
                 
-                {/* Debug logging */}
-                {console.log('🔍 SemanticSearch Debug:', { 
-                  storedCodebase: storedCodebase?.metadata, 
-                  hasId: !!storedCodebase?.metadata.id,
-                  id: storedCodebase?.metadata.id,
-                  importedFromGitHub,
-                  isIndexed
-                })}
+
                 
                 {storedCodebase?.metadata.id ? (
                   <SemanticSearch
@@ -1274,10 +1266,10 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
           )}
 
           {/* Webhook Status for GitHub Repositories */}
-          {importedFromGitHub && importedRepository && githubSyncProgress?.result?.webhookSetup && (
+          {importedFromGitHub && importedRepository && (githubSyncProgress?.result as any)?.webhookSetup && (
             <WebhookStatus
               repositoryFullName={importedRepository.fullName}
-              webhookId={githubSyncProgress.result.webhookId}
+              webhookId={(githubSyncProgress?.result as any)?.webhookId}
               className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700"
             />
           )}

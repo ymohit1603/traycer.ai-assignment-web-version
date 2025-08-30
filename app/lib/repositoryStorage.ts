@@ -288,10 +288,10 @@ export class RepositoryStorageService {
     return {
       id: `sync_${repository.id}_${now}`,
       repositoryId: repository.id.toString(),
-      fullName: repository.full_name || repository.fullName,
+      fullName: repository.fullName,
       owner: repository.owner.login,
       name: repository.name,
-      branch: repository.default_branch || repository.defaultBranch,
+      branch: repository.defaultBranch,
       lastSyncCommit: merkleTree.commit || '',
       lastSyncTimestamp: now,
       merkleTreeSerialized: MerkleTreeService.serializeMerkleTree(merkleTree),

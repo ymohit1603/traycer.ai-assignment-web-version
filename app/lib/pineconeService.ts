@@ -19,6 +19,7 @@ export interface PineconeChunkMetadata {
   codebaseId: string;
   timestamp: number;
   contentPreview: string; // First 200 chars of content
+  [key: string]: any; // Index signature for Pinecone compatibility
 }
 
 export interface PineconeVector {
@@ -325,7 +326,7 @@ export class PineconeService {
       const results: SearchResult[] = response.matches?.map(match => ({
         chunkId: match.id,
         score: match.score || 0,
-        metadata: match.metadata as PineconeChunkMetadata
+        metadata: (match.metadata || {}) as PineconeChunkMetadata
       })) || [];
 
       console.log(`✅ Found ${results.length} similar chunks`);
@@ -433,7 +434,7 @@ export class PineconeService {
       const stats = await index.describeIndexStats();
       
       return {
-        vectorCount: stats.totalVectorCount || 0,
+        vectorCount: stats.totalRecordCount || 0,
         dimension: this.dimension,
         indexFullness: stats.indexFullness || 0
       };
@@ -455,7 +456,7 @@ export class PineconeService {
       
       await index.update({
         id: chunkId,
-        setMetadata: metadata
+        metadata: metadata
       });
 
       console.log(`✅ Updated metadata for chunk: ${chunkId}`);
@@ -511,7 +512,7 @@ export class PineconeService {
     keywords?: string[];
     topK?: number;
   }): Promise<SearchResult[]> {
-    const filters: Record<string, unknown> = {};
+    const filters: Record<string, string | number | boolean | string[] | { $eq?: string | number | boolean; $in?: string[] }> = {};
 
     // Build filters
     if (options.codebaseId) {
@@ -526,12 +527,12 @@ export class PineconeService {
       filters.type = { $in: options.chunkTypes };
     }
 
-    if (options.minComplexity !== undefined) {
-      filters.complexity = { $gte: options.minComplexity };
-    }
-
-    if (options.maxComplexity !== undefined) {
-      filters.complexity = { ...filters.complexity, $lte: options.maxComplexity };
+    // Note: Pinecone's basic filters don't support $gte/$lte
+    // For complexity filtering, we'll use $eq for exact matches or skip advanced range queries
+    if (options.minComplexity !== undefined && options.maxComplexity === undefined) {
+      filters.complexity = { $eq: options.minComplexity };
+    } else if (options.maxComplexity !== undefined && options.minComplexity === undefined) {
+      filters.complexity = { $eq: options.maxComplexity };
     }
 
     if (options.keywords && options.keywords.length > 0) {

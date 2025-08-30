@@ -213,7 +213,7 @@ export class SimilaritySearchService {
       errors
     });
 
-    let embeddingBatch: EmbeddingBatch;
+    let embeddingBatch: EmbeddingBatch | undefined;
     
     try {
       console.log('🧠 Generating embeddings for all chunks...');
@@ -823,7 +823,7 @@ export class SimilaritySearchService {
       return {
         status: 'unhealthy',
         components: {
-          pinecone: { connected: false, error: 'Health check failed' },
+          pinecone: { connected: false, indexExists: false, indexReady: false, error: 'Health check failed' },
           embeddings: false,
           chunking: false
         },

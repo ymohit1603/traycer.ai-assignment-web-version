@@ -16,12 +16,6 @@ export default function PlanProgressTracker({ plan, onClose, isOpen }: PlanProgr
   const [noteText, setNoteText] = useState("");
   const [timeSpent, setTimeSpent] = useState<number>(0);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadProgress();
-    }
-  }, [isOpen, plan.id, loadProgress]);
-
   const loadProgress = useCallback(async () => {
     let existingProgress = PlanHistoryService.getPlanProgress(plan.id);
     
@@ -36,6 +30,12 @@ export default function PlanProgressTracker({ plan, onClose, isOpen }: PlanProgr
       setSelectedSection(plan.sections[0].id);
     }
   }, [plan.id, plan.sections]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadProgress();
+    }
+  }, [isOpen, plan.id, loadProgress]);
 
   const updateItemStatus = async (
     itemId: string,
