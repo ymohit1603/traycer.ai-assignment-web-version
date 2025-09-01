@@ -15,7 +15,7 @@ export interface FileReadStatus {
 }
 
 export interface FileReadingProgress {
-  phase: 'initializing' | 'indexing' | 'searching' | 'assembling' | 'complete';
+  phase: 'initializing' | 'indexing' | 'searching' | 'assembling' | 'complete' | 'completed-persistent';
   message: string;
   progress: number;
   currentFile?: string;
@@ -108,7 +108,7 @@ export default function FileReadingIndicator({
   const recentCompletedFiles = progress.completedFiles.slice(-3);
 
   return (
-    <div className={`fixed top-4 right-4 z-50 transition-all duration-300 ${
+    <div className={`fixed top-4 right-4 z-40 transition-all duration-300 ${
       isCollapsed ? 'w-80' : 'w-96'
     } max-w-md`}>
       <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-2xl backdrop-blur-sm bg-opacity-95">
@@ -404,6 +404,9 @@ export function useFileReadingProgress() {
       progress: 100,
       message: 'Context assembly complete!'
     } : null);
+    
+    // Keep the progress visible for completed state and don't auto-hide
+    // The user or parent component can manually hide it
   };
 
   const hideProgress = () => {
@@ -415,6 +418,16 @@ export function useFileReadingProgress() {
     setIsVisible(false);
   };
 
+  const persistCompleted = () => {
+    // When called, keep the completed state visible and don't allow updates
+    setProgress(prev => prev ? {
+      ...prev,
+      phase: 'completed-persistent',
+      progress: 100,
+      message: 'File reading complete (kept for reference)'
+    } : null);
+  };
+
   return {
     progress,
     isVisible,
@@ -423,6 +436,7 @@ export function useFileReadingProgress() {
     addFileStatus,
     completeProgress,
     hideProgress,
-    resetProgress
+    resetProgress,
+    persistCompleted
   };
 }

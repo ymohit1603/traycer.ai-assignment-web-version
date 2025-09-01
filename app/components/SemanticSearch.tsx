@@ -93,7 +93,8 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className, 
     addFileStatus,
     completeProgress,
     hideProgress,
-    resetProgress
+    resetProgress,
+    persistCompleted
   } = useFileReadingProgress();
 
   const checkIndexStatus = useCallback(async () => {
@@ -404,6 +405,12 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className, 
       });
 
       completeProgress();
+      
+      // Persist the completed file reading progress so it doesn't get overwritten
+      setTimeout(() => {
+        persistCompleted();
+      }, 1000);
+      
       setLastResults(data);
       onResultsFound(data);
 

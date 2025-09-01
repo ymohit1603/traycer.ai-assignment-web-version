@@ -589,7 +589,7 @@ export default function Home() {
       const plan = await openAIService.generateImplementationPlan(
         codebase!,
         promptText,
-        1200, // max tokens
+        8000, // max tokens - increased for detailed implementation plans
         (progress) => setPlanProgress(progress), // progress callback
         useDeepAnalysis // analysis mode
       );
@@ -851,7 +851,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
         refinedPlan = await openAIService.generateImplementationPlan(
           storedCodebase,
           contextualPrompt,
-          1200,
+          8000, // max tokens - increased for detailed refined plans
           (progress) => setPlanProgress(progress), // progress callback
           useDeepAnalysis // analysis mode
         );
@@ -1099,7 +1099,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
-                  🔧 Plan Generation
+                   Plan Generation
                 </button>
                 <button
                   onClick={() => searchMode === 'plan' && toggleSearchMode()}
@@ -1109,7 +1109,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
-                  🧠 Semantic Search
+                   Semantic Search
                 </button>
               </div>
             </div>

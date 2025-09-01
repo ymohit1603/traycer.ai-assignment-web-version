@@ -407,8 +407,10 @@ export class OpenAIService {
           { role: "user", content: userPrompt },
         ],
         max_tokens: maxTokens,
-        temperature: 0.7,
-        top_p: 0.9,
+        temperature: 0.3, // Lower temperature for more focused, consistent output
+        top_p: 0.95, // Slightly higher for better quality
+        presence_penalty: 0.1, // Encourage more comprehensive coverage
+        frequency_penalty: 0.1, // Reduce repetition
         stream: true, // Enable streaming
       });
 
@@ -459,8 +461,10 @@ export class OpenAIService {
           { role: "user", content: userPrompt },
         ],
         max_tokens: maxTokens,
-        temperature: 0.7,
-        top_p: 0.9,
+        temperature: 0.3, // Lower temperature for more focused output
+        top_p: 0.95, // Better quality
+        presence_penalty: 0.1, // Encourage comprehensive coverage
+        frequency_penalty: 0.1, // Reduce repetition
       });
 
       const response = completion.choices[0]?.message?.content;
@@ -534,52 +538,94 @@ export class OpenAIService {
   }
 
   private buildSystemPrompt(): string {
-    return `You are an elite software architect with extensive experience in modern web development, specializing in creating comprehensive, actionable implementation plans that developers can execute flawlessly.
+    return `You are an elite software architect and full-stack development expert with extensive experience in modern web development, specializing in creating comprehensive, detailed implementation plans that developers can execute flawlessly.
 
 ## Your Mission:
-Generate detailed, professional implementation plans that provide complete guidance for building features from start to finish. Your plans should be thorough, well-structured, and include every necessary file and configuration.
+Generate exhaustively detailed, professional implementation plans that provide step-by-step guidance for building complete features from start to finish. Your plans must be comprehensive enough that a skilled developer can implement the entire feature without additional research or guesswork.
 
 ## MANDATORY FORMAT - Follow this EXACT structure:
 
 **Observations**
-Write a comprehensive paragraph (4-6 sentences) that thoroughly analyzes the current codebase state. Identify the existing architecture, technology stack, current limitations, and what needs to be implemented. Discuss relevant patterns, components, services, and infrastructure already in place. Explain why the requested feature is needed and how it fits into the current system. Be detailed and technical in your analysis.
+Write a comprehensive analysis (6-10 sentences) that thoroughly examines the current codebase state. Identify the existing architecture, technology stack, frameworks, libraries, current patterns, components, services, and infrastructure already in place. Analyze current limitations, gaps, and what specifically needs to be implemented. Discuss how the requested feature fits into the existing system architecture. Explain dependencies, potential conflicts, and integration points. Be highly detailed and technical in your analysis, mentioning specific file structures, naming conventions, and existing patterns.
 
 **Approach**
-Start with 2-3 sentences explaining your overall implementation strategy and why it's optimal for this codebase. Then outline your approach in numbered phases:
+Start with 3-4 sentences explaining your overall implementation strategy and why it's optimal for this specific codebase and tech stack. Then outline your approach in detailed numbered phases:
 
-Phase 1: [Brief description of first major step]
-Phase 2: [Brief description of second major step]  
-Phase 3: [Brief description of third major step]
-Phase 4: [Brief description of fourth major step]
+Phase 1: [Detailed description of first major step with specific deliverables]
+Phase 2: [Detailed description of second major step with specific deliverables]  
+Phase 3: [Detailed description of third major step with specific deliverables]
+Phase 4: [Detailed description of fourth major step with specific deliverables]
+Phase 5: [If needed - additional phases for complex features]
 
-Include a final sentence about future considerations or benefits of this approach.
+Include 2-3 sentences about future considerations, scalability, maintainability, and benefits of this approach.
 
 **Implementation Files**
-List all necessary files in logical implementation order. For each file, use this EXACT format:
+List ALL necessary files in logical implementation order. Be extremely comprehensive - include every file that needs to be created or modified. For each file, use this EXACT format:
 
 filename.ext
 MODIFY or NEW
-Detailed description of what needs to be implemented in this file. Include specific component names, functions, interfaces, configurations, and implementation details. Explain the purpose, key functionality, dependencies, and how it integrates with other parts of the system. Mention specific imports, exports, props, state management, error handling, and any special considerations. Be comprehensive but avoid actual code - focus on clear, actionable instructions that a developer can follow.
+Provide an exhaustively detailed description (4-8 sentences minimum) of what needs to be implemented in this file. Include:
+- Specific component names, function signatures, interfaces, types, and class definitions
+- Detailed functionality requirements and business logic
+- All imports and exports needed
+- Props, state management, and data flow
+- Error handling, validation, and edge cases
+- Integration points with other components/services
+- Styling, responsive design, and UI/UX considerations
+- Configuration options and environment variables
+- Testing considerations and accessibility requirements
+- Performance optimizations and security considerations
+- Specific hooks, context providers, or custom logic needed
+- Database schema changes, API endpoints, or backend modifications
+- Third-party integrations and external dependencies
 
 ## Critical Requirements:
-1. **COMPREHENSIVE COVERAGE**: Include ALL necessary files for a complete implementation
-2. **DETAILED INSTRUCTIONS**: Each file description should be thorough and actionable  
-3. **LOGICAL ORDER**: List files in the order they should be implemented
-4. **CLEAR LABELS**: Mark each file as either MODIFY (existing file) or NEW (create new file)
-5. **NO CODE**: Provide detailed instructions but never include actual code snippets
-6. **INTEGRATION FOCUS**: Clearly explain how each piece connects to existing code
-7. **COMPLETE FEATURE**: Ensure the plan results in a fully working feature
-8. **TECHNICAL DEPTH**: Include specific technical details, dependencies, and configurations
+1. **EXHAUSTIVE COVERAGE**: Include every single file that needs creation or modification for a complete implementation
+2. **MAXIMUM DETAIL**: Each file description must be comprehensive with 4-8 sentences minimum  
+3. **IMPLEMENTATION ORDER**: List files in the exact order they should be implemented to avoid dependency issues
+4. **CLEAR LABELS**: Always mark each file as either MODIFY (existing file) or NEW (create new file)
+5. **NO CODE SNIPPETS**: Provide detailed prose instructions but never include actual code
+6. **DEEP INTEGRATION**: Clearly explain how each piece connects to existing code and architecture
+7. **COMPLETE FEATURE**: Ensure the plan results in a fully working, production-ready feature
+8. **TECHNICAL DEPTH**: Include specific technical details, dependencies, configurations, and architectural decisions
+9. **COMPREHENSIVE FILES**: Include ALL supporting files like types, utilities, tests, configurations, styles, and documentation
+10. **REAL-WORLD READY**: Consider error handling, loading states, accessibility, responsive design, and production concerns
+
+## File Types to Always Consider:
+- Component files (.tsx/.jsx)
+- Type definition files (.ts/.d.ts)
+- Utility and helper functions (.ts)
+- API route files (route.ts)
+- Style files (.css/.scss)
+- Configuration files (.json/.js/.ts)
+- Database schema/migration files
+- Test files (.test.ts/.spec.ts)
+- Hook and context files
+- Service and API client files
+- Middleware files
+- Environment and deployment files
 
 ## Quality Standards:
-- Plans should enable developers to build the complete feature
-- Every instruction should be immediately actionable
-- Include all necessary configurations, dependencies, and setup steps
-- Explain the reasoning behind architectural decisions
-- Provide comprehensive coverage without overwhelming detail
-- Focus on professional, production-ready implementations
+- Plans must enable developers to build complete, production-ready features
+- Every instruction must be immediately actionable and specific
+- Include all necessary configurations, dependencies, package installations, and setup steps
+- Explain the reasoning behind every architectural decision
+- Provide comprehensive coverage with appropriate technical depth
+- Focus on professional, scalable, maintainable implementations
+- Consider security, performance, accessibility, and user experience
+- Include proper error handling, loading states, and edge cases
+- Ensure responsive design and cross-browser compatibility
 
-Remember: Your goal is to create a complete, professional implementation plan that covers every aspect needed to successfully build the requested feature.`;
+## Expected Output Quality:
+Your implementation plan should be so detailed and comprehensive that:
+- A senior developer can implement it without additional research
+- All edge cases and error scenarios are covered
+- The feature integrates seamlessly with existing architecture
+- The result is production-ready and follows best practices
+- All files are clearly defined with specific responsibilities
+- Dependencies and implementation order are crystal clear
+
+Remember: Your goal is to create a complete, professional implementation plan that covers every single aspect needed to successfully build a production-ready feature. Be thorough, be specific, and ensure nothing is left to guesswork.`;
   }
 
   private buildUserPrompt(context: ContextData): string {
@@ -648,7 +694,18 @@ The goal is a complete, professional implementation plan that covers every aspec
       const filesContent = filesMatch ? filesMatch[1].trim() : '';
       
       // Parse individual files from the Implementation Files section
+      console.log('🔍 Parsing Implementation Files section...', {
+        hasFilesMatch: !!filesMatch,
+        filesContentLength: filesContent.length,
+        filesContentPreview: filesContent.substring(0, 300)
+      });
+      
       const fileEntries = this.parseFileEntries(filesContent);
+      
+      console.log('📁 Parsed file entries:', {
+        totalFiles: fileEntries.length,
+        fileNames: fileEntries.map(f => f.title).slice(0, 10)
+      });
       
       // Extract title from the user prompt or generate one
       const title = this.generatePlanTitle(context.userPrompt);
@@ -749,8 +806,18 @@ The goal is a complete, professional implementation plan that covers every aspec
   private parseFileEntries(filesContent: string): PlanItem[] {
     const items: PlanItem[] = [];
     
+    console.log('📝 Starting file entries parsing...', {
+      filesContentLength: filesContent.length,
+      hasContent: filesContent.length > 0
+    });
+    
     // Split by filename patterns - look for lines that are followed by MODIFY or NEW
     const fileBlocks = filesContent.split(/(?=^[^\n]*\n(?:MODIFY|NEW))/m).filter(block => block.trim());
+    
+    console.log('🔍 Split into file blocks:', {
+      totalBlocks: fileBlocks.length,
+      blockPreviews: fileBlocks.slice(0, 3).map(block => block.substring(0, 100))
+    });
     
     // Process all file blocks for comprehensive implementation
     fileBlocks.forEach((block, index) => {
@@ -762,10 +829,18 @@ The goal is a complete, professional implementation plan that covers every aspec
       const descriptionLines = lines.slice(2);
       const description = descriptionLines.join('\n').trim();
       
+      console.log(`📄 Processing file block ${index}:`, {
+        fileName,
+        actionType,
+        descriptionLength: description.length,
+        lineCount: lines.length
+      });
+      
       // Skip entries marked as optional
       if (fileName.toLowerCase().includes('(optional)') || 
           actionType.toLowerCase().includes('(optional)') || 
           description.toLowerCase().includes('(optional)')) {
+        console.log(`⏭️ Skipping optional file: ${fileName}`);
         return;
       }
       
@@ -808,6 +883,13 @@ The goal is a complete, professional implementation plan that covers every aspec
         dependencies: index > 0 ? [`file_${index - 1}`] : [],
         estimatedTime: this.estimateFileTime(description, isNew),
       });
+      
+      console.log(`✅ Added file entry: ${fileName} (${actionType})`);
+    });
+    
+    console.log('🎯 Final parsing results:', {
+      totalItemsParsed: items.length,
+      fileTypes: items.map(item => ({ name: item.title, type: item.type }))
     });
     
     return items;
@@ -1011,7 +1093,7 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
       authentication?: string;
       deployment?: string;
     },
-    maxTokens: number = 1200,
+    maxTokens: number = 100000,
     onProgress?: ProgressCallback
   ): Promise<GeneratedPlan> {
     console.log('🚀 Starting new project plan generation...', {
@@ -1208,8 +1290,10 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
         { role: "user", content: userPrompt },
       ],
       max_tokens: maxTokens,
-      temperature: 0.7,
-      top_p: 0.9,
+      temperature: 0.3, // More focused, detailed responses
+      top_p: 0.95, // Better quality
+      presence_penalty: 0.1, // Encourage comprehensive coverage
+      frequency_penalty: 0.1, // Reduce repetition
     });
 
     const response = completion.choices[0]?.message?.content;

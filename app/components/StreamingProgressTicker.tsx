@@ -10,7 +10,66 @@ interface StreamingProgressTickerProps {
 
 export default function StreamingProgressTicker({ progress, isVisible }: StreamingProgressTickerProps) {
   const [toolHistory, setToolHistory] = useState<{name: string, file?: string}[]>([]);
+  const [progressLog, setProgressLog] = useState<{message: string, type: 'file' | 'step', timestamp: number}[]>([]);
   
+  // Keep a persistent log of all progress steps
+  useEffect(() => {
+    if (!progress) return;
+
+    // Add file reading to log
+    if (progress.currentFile) {
+      setProgressLog(prev => {
+        const lastEntry = prev[prev.length - 1];
+        const newMessage = ` read ${progress.currentFile}`;
+        
+        // Only add if it's different from the last entry
+        if (!lastEntry || lastEntry.message !== newMessage) {
+          return [...prev, {
+            message: newMessage,
+            type: 'file',
+            timestamp: Date.now()
+          }];
+        }
+        return prev;
+      });
+    }
+
+    // Add AI generation steps to log
+    if (progress.step) {
+      let stepMessage = '';
+      switch (progress.step) {
+        case 'analyzing':
+          stepMessage = '🔍 AI is analyzing codebase...';
+          break;
+        case 'generating':
+          stepMessage = '🤖 AI is generating implementation plan...';
+          break;
+        case 'finalizing':
+          stepMessage = '📋 AI is finalizing your plan...';
+          break;
+        case 'complete':
+          stepMessage = '✅ Plan generation complete!';
+          break;
+      }
+
+      if (stepMessage) {
+        setProgressLog(prev => {
+          const lastEntry = prev[prev.length - 1];
+          
+          // Only add if it's different from the last entry
+          if (!lastEntry || lastEntry.message !== stepMessage) {
+            return [...prev, {
+              message: stepMessage,
+              type: 'step',
+              timestamp: Date.now()
+            }];
+          }
+          return prev;
+        });
+      }
+    }
+  }, [progress?.currentFile, progress?.step]);
+
   // Keep a history of recent tool calls for a more authentic experience
   useEffect(() => {
     if (progress?.toolCall && progress.currentFile) {
@@ -29,6 +88,17 @@ export default function StreamingProgressTicker({ progress, isVisible }: Streami
       });
     }
   }, [progress?.toolCall, progress?.currentFile]);
+
+  // Clear log when progress ends
+  useEffect(() => {
+    if (!isVisible) {
+      // Keep the log for a few seconds after completion, then clear
+      const timer = setTimeout(() => {
+        setProgressLog([]);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible]);
 
   if (!isVisible || !progress) {
     return null;
@@ -65,23 +135,18 @@ export default function StreamingProgressTicker({ progress, isVisible }: Streami
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-900 via-purple-900 to-blue-900 border-b border-blue-700 shadow-lg">
+    <div className="fixed top-0 left-0 right-0 z-30 bg-gradient-to-r from-blue-900 via-purple-900 to-blue-900 border-b border-blue-700 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 py-3">
-        <div className="flex items-center justify-between">
-          {/* Left side - Current action */}
-          <div className="flex items-center space-x-4 flex-1">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-              <span className="text-white font-medium text-sm">
-                {progress.message}
-              </span>
-            </div>
-            
-            {/* Current file being read - Cursor-style prominent display */}
-            {renderToolCall()}
+        {/* Header with overall progress */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            <span className="text-white font-medium text-sm">
+              {progress.message}
+            </span>
           </div>
 
-          {/* Right side - Progress bar and percentage */}
+          {/* Progress bar and percentage */}
           <div className="flex items-center space-x-3 min-w-[200px]">
             <div className="flex-1 bg-blue-800/50 rounded-full h-2">
               <div 
@@ -97,37 +162,40 @@ export default function StreamingProgressTicker({ progress, isVisible }: Streami
             </span>
           </div>
         </div>
-        
-        {/* Recent tool calls - Cursor AI style */}
-        {toolHistory.length > 0 && (
-          <div className="mt-1.5 flex items-center space-x-3 text-xs text-blue-300/70">
-            <span className="text-blue-400 font-medium">Recent:</span>
-            {toolHistory.map((tool, index) => (
-              <div key={index} className="flex items-center space-x-1">
-                <span className="opacity-70">{tool.name.replace(/_/g, ' ')}</span>
-                {tool.file && (
-                  <span className="font-mono opacity-80">{tool.file.split('/').pop()}</span>
-                )}
-              </div>
-            ))}
+
+        {/* Persistent Progress Log */}
+        {progressLog.length > 0 && (
+          <div className="bg-blue-900/30 rounded-lg p-3 max-h-32 overflow-y-auto">
+            <div className="space-y-1">
+              {progressLog.map((entry, index) => (
+                <div 
+                  key={index} 
+                  className={`text-sm font-mono flex items-center space-x-2 ${
+                    entry.type === 'file' 
+                      ? 'text-green-300' 
+                      : 'text-blue-200'
+                  }`}
+                >
+                  <span className="text-xs text-blue-300/60">
+                    {new Date(entry.timestamp).toLocaleTimeString('en-US', { 
+                      hour12: false, 
+                      minute: '2-digit', 
+                      second: '2-digit' 
+                    })}
+                  </span>
+                  <span>{entry.message}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-        
-        {/* Step indicator */}
-        <div className="mt-1 flex items-center justify-between">
-          <div className="text-xs text-blue-300 uppercase tracking-wide font-medium">
-            {progress.step === 'analyzing' && '🔍 ANALYZING CODEBASE'}
-            {progress.step === 'generating' && '🤖 GENERATING PLAN'}
-            {progress.step === 'finalizing' && '📋 FINALIZING PLAN'}
-            {progress.step === 'complete' && '✅ COMPLETE'}
+
+        {/* Current Tool Call - if active */}
+        {renderToolCall() && (
+          <div className="mt-2">
+            {renderToolCall()}
           </div>
-          
-          {progress.toolCall && (
-            <div className="text-xs text-blue-400">
-              {progress.toolCall.name.replace(/_/g, ' ')} operation in progress...
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

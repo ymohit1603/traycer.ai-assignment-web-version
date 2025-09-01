@@ -146,7 +146,7 @@ export default function SemanticSearchResults({ results, onClose }: SemanticSear
                 <div className="text-xs text-gray-400">Total Lines</div>
               </div>
               <div className="bg-gray-700 rounded-lg p-3">
-                <div className="text-2xl font-bold text-purple-400">{results.metadata.totalSearchTime + results.metadata.totalAssemblyTime}ms</div>
+                <div className="text-2xl font-bold text-purple-400">{results.metadata.totalSearchTime }ms</div>
                 <div className="text-xs text-gray-400">Processing Time</div>
               </div>
             </div>

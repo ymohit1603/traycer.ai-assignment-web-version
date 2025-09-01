@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import { StorageManager } from '../lib/storageManager';
 import { CodebaseIndex } from '../lib/codebaseParser';
+import { RepositoryStorageService, RepositorySyncData } from '../lib/repositoryStorage';
 
 export interface GitHubRepository {
   id: number;
@@ -69,11 +70,28 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [showRepoList, setShowRepoList] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [syncedRepositories, setSyncedRepositories] = useState<Map<string, RepositorySyncData>>(new Map());
+  const [isSyncingRepo, setIsSyncingRepo] = useState<string | null>(null);
 
   // Check authentication status on mount
   useEffect(() => {
     checkAuthStatus();
+    loadSyncedRepositories();
   }, []);
+
+  // Load synced repositories from storage
+  const loadSyncedRepositories = async () => {
+    try {
+      const allSyncData = RepositoryStorageService.getAllRepositorySyncData();
+      const syncMap = new Map<string, RepositorySyncData>();
+      allSyncData.forEach(data => {
+        syncMap.set(data.fullName, data);
+      });
+      setSyncedRepositories(syncMap);
+    } catch (error) {
+      console.error('Error loading synced repositories:', error);
+    }
+  };
 
   const checkAuthStatus = async () => {
     try {
@@ -340,6 +358,106 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
     }
   };
 
+  const performIncrementalSync = async (repository: GitHubRepository) => {
+    const repoFullName = repository.fullName;
+    const codebaseId = `github_${repository.owner.login}_${repository.name}`;
+    
+    setIsSyncingRepo(repoFullName);
+    setSyncProgress(null);
+
+    try {
+      console.log(`🔄 Starting incremental sync for ${repoFullName}`);
+      
+      // Get stored repository sync data
+      const syncData = await RepositoryStorageService.getRepositorySyncByCodebaseId(codebaseId);
+      if (!syncData || !syncData.merkleTreeSerialized) {
+        throw new Error('No sync data found for repository. Please perform initial sync first.');
+      }
+
+      console.log(`📊 Found existing sync data. Last sync: ${new Date(syncData.lastSyncTimestamp).toLocaleString()}`);
+      
+      const response = await fetch('/api/github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'incremental-sync',
+          owner: repository.owner.login,
+          repo: repository.name,
+          branch: repository.defaultBranch,
+          oldMerkleTreeData: syncData.merkleTreeSerialized,
+          codebaseId
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to start incremental sync');
+      }
+
+      const progressId = data.progressId;
+      console.log(`📊 Incremental sync started, tracking progress: ${progressId}`);
+
+      // Poll for progress
+      let pollAttempts = 0;
+      const maxPollAttempts = 300; // 5 minutes
+
+      const pollInterval = setInterval(async () => {
+        pollAttempts++;
+        
+        try {
+          const progressResponse = await fetch(`/api/github?action=progress&progressId=${progressId}`);
+          const progressData = await progressResponse.json();
+          
+          if (progressData.success && progressData.progress) {
+            const progress = progressData.progress;
+            setSyncProgress(progress);
+
+            if (progress.phase === 'complete') {
+              clearInterval(pollInterval);
+              setIsSyncingRepo(null);
+              
+              // Reload synced repositories to update sync timestamp
+              await loadSyncedRepositories();
+              
+              if (progress.result?.changes?.totalChanges > 0) {
+                toast.success(`✅ Sync complete! ${progress.result.changes.totalChanges} changes processed.`);
+              } else {
+                toast.success('✅ Repository is up to date - no changes detected.');
+              }
+              
+              console.log('✅ Incremental sync completed');
+            } else if (progress.phase === 'error') {
+              clearInterval(pollInterval);
+              setIsSyncingRepo(null);
+              const errorMsg = progress.errors?.join(', ') || 'Unknown error occurred';
+              toast.error(`Incremental sync failed: ${errorMsg}`);
+              console.error('❌ Incremental sync failed:', progress.errors);
+            }
+          } else if (pollAttempts >= maxPollAttempts) {
+            clearInterval(pollInterval);
+            setIsSyncingRepo(null);
+            toast.error('Incremental sync timed out. Please try again.');
+            console.error('❌ Incremental sync timed out');
+          }
+        } catch (error) {
+          console.error('Error polling incremental sync progress:', error);
+          
+          if (pollAttempts >= maxPollAttempts) {
+            clearInterval(pollInterval);
+            setIsSyncingRepo(null);
+            toast.error('Network error during incremental sync. Please try again.');
+          }
+        }
+      }, 1000);
+
+    } catch (error) {
+      console.error('Incremental sync error:', error);
+      setIsSyncingRepo(null);
+      toast.error(`Failed to sync repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await fetch('/api/github?action=logout');
@@ -454,11 +572,15 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
             </div>
             
             <div className="overflow-y-auto max-h-80">
-              {repositories.map((repo) => (
+              {repositories.map((repo) => {
+                const syncData = syncedRepositories.get(repo.fullName);
+                const isSynced = !!syncData;
+                const isCurrentlySyncing = isSyncingRepo === repo.fullName;
+                
+                return (
                 <div
                   key={repo.id}
-                  className="p-4 border-b border-gray-700 hover:bg-gray-700 transition-colors cursor-pointer"
-                  onClick={() => syncRepository(repo)}
+                  className="p-4 border-b border-gray-700 hover:bg-gray-700 transition-colors"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -470,6 +592,12 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
                         {repo.language && (
                           <span className="px-2 py-1 text-xs bg-blue-600 text-blue-100 rounded">{repo.language}</span>
                         )}
+                        {isSynced && (
+                          <span className="px-2 py-1 text-xs bg-green-600 text-green-100 rounded flex items-center space-x-1">
+                            <span>✓</span>
+                            <span>Synced</span>
+                          </span>
+                        )}
                       </div>
                       {repo.description && (
                         <p className="text-sm text-gray-400 mb-2">{repo.description}</p>
@@ -478,16 +606,52 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
                         <span>{formatFileSize(repo.size)}</span>
                         <span>Updated {formatDate(repo.updatedAt)}</span>
                         <span>Branch: {repo.defaultBranch}</span>
+                        {isSynced && syncData && (
+                          <span className="text-green-400">
+                            Last sync: {new Date(syncData.lastSyncTimestamp).toLocaleDateString()}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="ml-4">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                    <div className="ml-4 flex space-x-2">
+                      {!isSynced ? (
+                        <button
+                          onClick={() => syncRepository(repo)}
+                          disabled={isSyncing}
+                          className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center space-x-1"
+                        >
+                          <span>Import</span>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => performIncrementalSync(repo)}
+                          disabled={isCurrentlySyncing || isSyncing}
+                          className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center space-x-1"
+                        >
+                          {isCurrentlySyncing ? (
+                            <>
+                              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              <span>Syncing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              <span>Sync</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         </div>
