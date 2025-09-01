@@ -97,7 +97,7 @@ export class OpenAIService {
   async generateImplementationPlan(
     storedCodebase: StoredCodebase,
     userPrompt: string,
-    maxTokens: number = 4000,
+    maxTokens: number = 100000,
     onProgress?: ProgressCallback,
     useDeepAnalysis: boolean = true
   ): Promise<GeneratedPlan> {
@@ -391,7 +391,7 @@ export class OpenAIService {
     const userPrompt = this.buildUserPrompt(context);
 
     console.log('📡 Making OpenAI API call with streaming...', {
-      model: "openai/gpt-4-turbo-preview",
+      model: "openai/gpt-oss-20b:free",
       systemPromptLength: systemPrompt.length,
       userPromptLength: userPrompt.length,
       maxTokens,
@@ -401,7 +401,7 @@ export class OpenAIService {
     try {
       // Use streaming for real-time updates
       const stream = await this.openai.chat.completions.create({
-        model: "openai/gpt-4-turbo-preview",
+        model: "openai/gpt-oss-20b:free",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -453,7 +453,7 @@ export class OpenAIService {
 
       // Fallback to non-streaming if streaming fails
       const completion = await this.openai.chat.completions.create({
-        model: "openai/gpt-4-turbo-preview",
+        model: "openai/gpt-oss-20b:free",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -1011,7 +1011,7 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
       authentication?: string;
       deployment?: string;
     },
-    maxTokens: number = 4000,
+    maxTokens: number = 1200,
     onProgress?: ProgressCallback
   ): Promise<GeneratedPlan> {
     console.log('🚀 Starting new project plan generation...', {

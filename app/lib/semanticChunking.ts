@@ -1,7 +1,4 @@
-import { parse } from '@babel/parser';
-import traverse, { NodePath } from '@babel/traverse';
-import * as t from '@babel/types';
-import crypto from 'crypto-js';
+import { createHash } from 'crypto';
 
 export interface CodeChunk {
   id: string;
@@ -51,343 +48,469 @@ export class SemanticChunker {
   async chunkCode(filePath: string, content: string, language?: string): Promise<CodeChunk[]> {
     const detectedLanguage = language || this.detectLanguage(filePath);
     
+    console.log(`🗂️ Starting chunking for ${filePath} (${detectedLanguage}, ${content.length} chars)`);
+    
     try {
+      let chunks: CodeChunk[] = [];
+      
       switch (detectedLanguage) {
         case 'javascript':
         case 'typescript':
         case 'jsx':
         case 'tsx':
-          return await this.chunkJavaScriptTypeScript(filePath, content, detectedLanguage);
+          chunks = await this.chunkJavaScriptTypeScript(filePath, content, detectedLanguage);
+          break;
         case 'python':
-          return await this.chunkPython(filePath, content);
+          chunks = await this.chunkPython(filePath, content);
+          break;
         case 'java':
-          return await this.chunkJava(filePath, content);
+          chunks = await this.chunkJava(filePath, content);
+          break;
         default:
-          return await this.chunkGeneric(filePath, content, detectedLanguage);
+          chunks = await this.chunkGeneric(filePath, content, detectedLanguage);
       }
+      
+      console.log(`📋 Created ${chunks.length} semantic chunks for ${filePath}:`);
+      chunks.forEach((chunk, index) => {
+        console.log(`  ${index + 1}. ${chunk.type}: ${chunk.name || 'unnamed'} (lines ${chunk.startLine}-${chunk.endLine}, ${chunk.content.length} chars)`);
+      });
+      
+      return chunks;
     } catch (error) {
-      console.error(`Error chunking file ${filePath}:`, error);
+      console.error(`❌ Error chunking file ${filePath}:`, error);
+      console.log(`🔄 Falling back to generic chunking for ${filePath}`);
       // Fallback to generic chunking
       return await this.chunkGeneric(filePath, content, detectedLanguage);
     }
   }
 
   /**
-   * Chunk JavaScript/TypeScript using AST parsing
+   * Chunk JavaScript/TypeScript using robust regex-based parsing
    */
   private async chunkJavaScriptTypeScript(filePath: string, content: string, language: string): Promise<CodeChunk[]> {
     const chunks: CodeChunk[] = [];
     
     try {
-      // Determine plugins based on file type and extension
-      const isTypeScript = language === 'typescript' || language === 'tsx' || filePath.endsWith('.ts') || filePath.endsWith('.tsx');
-      const isJSX = language === 'jsx' || language === 'tsx' || filePath.endsWith('.jsx') || filePath.endsWith('.tsx');
+      // Pre-validate and clean content
+      const cleanedContent = this.preprocessCodeContent(content, filePath);
       
-      const plugins: (string | [string, object])[] = [
-        'decorators-legacy',
-        'classProperties',
-        'objectRestSpread',
-        'asyncGenerators',
-        'functionBind',
-        'exportDefaultFrom',
-        'exportNamespaceFrom',
-        'dynamicImport',
-        'nullishCoalescingOperator',
-        'optionalChaining',
-        'importMeta',
-        'topLevelAwait',
-        'optionalCatchBinding',
-        'privateIn', // For private fields
-        'logicalAssignment' // For ||= &&= ??= operators
-      ];
-      
-      // Add TypeScript support first if needed
-      if (isTypeScript) {
-        plugins.push('typescript');
-      }
-      
-      // Add JSX support after TypeScript for .tsx files
-      if (isJSX) {
-        plugins.push('jsx');
-      }
-      
-      // Special handling for .tsx files
-      const parserOptions: {
-        sourceType: 'module';
-        allowImportExportEverywhere: boolean;
-        allowReturnOutsideFunction: boolean;
-        strictMode: boolean;
-        allowUndeclaredExports: boolean;
-        errorRecovery: boolean;
-        plugins: (string | [string, object])[];
-      } = {
-        sourceType: 'module',
-        allowImportExportEverywhere: true,
-        allowReturnOutsideFunction: true,
-        strictMode: false,
-        allowUndeclaredExports: true,
-        errorRecovery: true, // Continue parsing despite errors
-        plugins
-      };
-      
-      // For TSX files, we need to specify TypeScript with JSX
-      if (filePath.endsWith('.tsx')) {
-        parserOptions.plugins = plugins.filter(p => p !== 'jsx'); // Remove jsx
-        parserOptions.plugins.push(['typescript', { jsx: true }]); // Add typescript with JSX
-      }
-      
-      // Parse with appropriate settings for TypeScript/JSX
-      const ast = parse(content, parserOptions as any);
-
-      // Collect imports and exports first
+      // Track imports and exports
       const imports: string[] = [];
       const exports: string[] = [];
-
-      traverse(ast, {
-        // Collect imports
-        ImportDeclaration: (path) => {
-          const importStr = this.getNodeContent(content, path.node);
-          imports.push(path.node.source.value);
-          
-          chunks.push(this.createChunk(
-            importStr,
-            'import',
-            filePath,
-            path.node.loc?.start.line || 1,
-            path.node.loc?.end.line || 1,
-            language,
-            {
-              dependencies: [path.node.source.value],
-              imports: [path.node.source.value],
-              exports: [],
-              keywords: ['import']
-            }
-          ));
-        },
       
-        // Collect exports
-        ExportDeclaration: (path) => {
-          const exportStr = this.getNodeContent(content, path.node);
-          
-          if (t.isExportNamedDeclaration(path.node)) {
-            if (path.node.declaration) {
-              if (t.isFunctionDeclaration(path.node.declaration)) {
-                exports.push(path.node.declaration.id?.name || 'anonymous');
-              } else if (t.isClassDeclaration(path.node.declaration)) {
-                exports.push(path.node.declaration.id?.name || 'anonymous');
-              } else if (t.isVariableDeclaration(path.node.declaration)) {
-                path.node.declaration.declarations.forEach((decl) => {
-                  if (t.isIdentifier(decl.id)) {
-                    exports.push(decl.id.name);
-                  }
-                });
-              }
-            }
-          } else if (t.isExportDefaultDeclaration(path.node)) {
-            exports.push('default');
-          }
+      // Parse using robust regex patterns
+      this.parseWithRegex(cleanedContent, chunks, filePath, language, imports, exports);
       
-          chunks.push(this.createChunk(
-            exportStr,
-            'export',
-            filePath,
-            path.node.loc?.start.line || 1,
-            path.node.loc?.end.line || 1,
-            language,
-            {
-              dependencies: [],
-              imports: [],
-              exports: exports,
-              keywords: ['export']
-            }
-          ));
-        },
-      
-        // Functions (including arrow functions and methods)
-        FunctionDeclaration: (path) => {
-          if (path.parent.type === 'Program') { // Top-level functions only
-            this.processFunctionDeclaration(path, content, chunks, filePath, language, imports, exports);
-          }
-        },
-      
-        // Arrow functions assigned to variables
-        VariableDeclaration: (path) => {
-          if (path.parent.type === 'Program') {
-            path.node.declarations.forEach((declaration) => {
-              if (t.isArrowFunctionExpression(declaration.init) || 
-                  t.isFunctionExpression(declaration.init)) {
-                const funcContent = this.getNodeContent(content, path.node);
-                const funcName = t.isIdentifier(declaration.id) ? declaration.id.name : 'anonymous';
-                
-                chunks.push(this.createChunk(
-                  funcContent,
-                  'function',
-                  filePath,
-                  path.node.loc?.start.line || 1,
-                  path.node.loc?.end.line || 1,
-                  language,
-                  {
-                    dependencies: imports,
-                    imports: imports,
-                    exports: exports,
-                    keywords: this.extractKeywords(funcContent)
-                  },
-                  funcName
-                ));
-              } else {
-                // Regular variable declaration
-                const varContent = this.getNodeContent(content, path.node);
-                const varName = t.isIdentifier(declaration.id) ? declaration.id.name : 'anonymous';
-                
-                chunks.push(this.createChunk(
-                  varContent,
-                  'variable',
-                  filePath,
-                  path.node.loc?.start.line || 1,
-                  path.node.loc?.end.line || 1,
-                  language,
-                  {
-                    dependencies: imports,
-                    imports: imports,
-                    exports: exports,
-                    keywords: this.extractKeywords(varContent)
-                  },
-                  varName
-                ));
-              }
-            });
-          }
-        },
-      
-        // Classes
-        ClassDeclaration: (path) => {
-          if (path.parent.type === 'Program') {
-            this.processClassDeclaration(path, content, chunks, filePath, language, imports, exports);
-          }
-        },
-      
-        // Interfaces (TypeScript)
-        TSInterfaceDeclaration: (path) => {
-          const interfaceContent = this.getNodeContent(content, path.node);
-          const interfaceName = path.node.id.name;
-          
-          chunks.push(this.createChunk(
-            interfaceContent,
-            'interface',
-            filePath,
-            path.node.loc?.start.line || 1,
-            path.node.loc?.end.line || 1,
-            language,
-            {
-              dependencies: imports,
-              imports: imports,
-              exports: exports,
-              keywords: this.extractKeywords(interfaceContent)
-            },
-            interfaceName
-          ));
-        },
-      
-        // Type aliases (TypeScript)
-        TSTypeAliasDeclaration: (path) => {
-          const typeContent = this.getNodeContent(content, path.node);
-          const typeName = path.node.id.name;
-          
-          chunks.push(this.createChunk(
-            typeContent,
-            'type',
-            filePath,
-            path.node.loc?.start.line || 1,
-            path.node.loc?.end.line || 1,
-            language,
-            {
-              dependencies: imports,
-              imports: imports,
-              exports: exports,
-              keywords: this.extractKeywords(typeContent)
-            },
-            typeName
-          ));
-        }
-      });
-
-      return chunks;
-    } catch (parseError) {
-      console.warn(`AST parsing failed for ${filePath}, falling back to generic chunking:`, parseError);
-      return await this.chunkGeneric(filePath, content, language);
-    }
-  }
-
-  private processFunctionDeclaration(path: NodePath<t.FunctionDeclaration>, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
-    const funcContent = this.getNodeContent(content, path.node);
-    const funcName = path.node.id?.name || 'anonymous';
-    
-    chunks.push(this.createChunk(
-      funcContent,
-      'function',
-      filePath,
-      path.node.loc?.start.line || 1,
-      path.node.loc?.end.line || 1,
-      language,
-      {
-        dependencies: imports,
-        imports: imports,
-        exports: exports,
-        keywords: this.extractKeywords(funcContent)
-      },
-      funcName
-    ));
-  }
-
-  private processClassDeclaration(path: NodePath<t.ClassDeclaration>, content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]) {
-    const classContent = this.getNodeContent(content, path.node);
-    const className = path.node.id?.name || 'anonymous';
-    
-    const classChunk = this.createChunk(
-      classContent,
-      'class',
-      filePath,
-      path.node.loc?.start.line || 1,
-      path.node.loc?.end.line || 1,
-      language,
-      {
-        dependencies: imports,
-        imports: imports,
-        exports: exports,
-        keywords: this.extractKeywords(classContent)
-      },
-      className
-    );
-
-    chunks.push(classChunk);
-
-    // Process class methods as separate chunks
-    path.node.body.body.forEach((node) => {
-      if (t.isClassMethod(node)) {
-        const methodContent = this.getNodeContent(content, node);
-        const methodName = t.isIdentifier(node.key) ? node.key.name : 'anonymous';
-        
-        const methodChunk = this.createChunk(
-          methodContent,
-          'method',
+      // If no specific chunks were found, create a generic chunk
+      if (chunks.length === 0) {
+        chunks.push(this.createChunk(
+          cleanedContent,
+          'block',
           filePath,
-          node.loc?.start.line || 1,
-          node.loc?.end.line || 1,
+          1,
+          cleanedContent.split('\n').length,
           language,
           {
             dependencies: imports,
             imports: imports,
             exports: exports,
-            keywords: this.extractKeywords(methodContent)
-          },
-          `${className}.${methodName}`,
-          classChunk.id
-        );
-
-        chunks.push(methodChunk);
-        classChunk.childChunks.push(methodChunk.id);
+            keywords: this.extractKeywords(cleanedContent)
+          }
+        ));
       }
-    });
+      
+      return chunks;
+      
+    } catch (error: any) {
+      console.warn(`Regex parsing failed for ${filePath}:`, error.message);
+      // Fallback to generic chunking
+      return await this.chunkGeneric(filePath, content, language);
+    }
+  }
+
+  /**
+   * Pre-process code content to fix common syntax issues
+   */
+  private preprocessCodeContent(content: string, filePath: string): string {
+    try {
+      let cleaned = content;
+      
+      // Remove BOM if present
+      if (cleaned.charCodeAt(0) === 0xFEFF) {
+        cleaned = cleaned.slice(1);
+      }
+      
+      // Normalize line endings
+      cleaned = cleaned.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      
+      // Remove trailing whitespace from lines
+      cleaned = cleaned.split('\n').map(line => line.trimEnd()).join('\n');
+      
+      // Fix common trailing comma issues in objects and arrays
+      cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+      
+      // Fix missing semicolons before closing braces (common in some JS dialects)
+      cleaned = cleaned.replace(/([^;\s}])\s*\n\s*}/g, '$1;\n}');
+      
+      // Remove duplicate semicolons
+      cleaned = cleaned.replace(/;;+/g, ';');
+      
+      // Fix common JSX issues - ensure proper closing tags
+      if (filePath.endsWith('.jsx') || filePath.endsWith('.tsx')) {
+        // Fix self-closing tags without proper syntax
+        cleaned = cleaned.replace(/<(\w+)([^>]*?)(?<!\/)\s*>/g, (match, tagName, attrs) => {
+          if (attrs && !attrs.includes('=')) {
+            // Likely a self-closing tag
+            return `<${tagName}${attrs} />`;
+          }
+          return match;
+        });
+      }
+      
+      // Ensure the file ends with a newline
+      if (!cleaned.endsWith('\n')) {
+        cleaned += '\n';
+      }
+      
+      return cleaned;
+    } catch (cleanError) {
+      console.warn(`Error preprocessing content for ${filePath}:`, cleanError);
+      return content; // Return original content if cleaning fails
+    }
+  }
+
+  /**
+   * Parse code using robust regex patterns
+   */
+  private parseWithRegex(
+    content: string, 
+    chunks: CodeChunk[], 
+    filePath: string, 
+    language: string, 
+    imports: string[], 
+    exports: string[]
+  ): void {
+    const lines = content.split('\n');
+    
+    try {
+      // Parse imports
+      this.parseImports(content, chunks, filePath, language, imports);
+      
+      // Parse exports  
+      this.parseExports(content, chunks, filePath, language, exports);
+      
+      // Parse interfaces (TypeScript)
+      if (language.includes('typescript') || filePath.endsWith('.ts') || filePath.endsWith('.tsx')) {
+        this.parseInterfaces(content, chunks, filePath, language, imports, exports);
+        this.parseTypeAliases(content, chunks, filePath, language, imports, exports);
+      }
+      
+      // Parse functions
+      this.parseFunctions(content, chunks, filePath, language, imports, exports);
+      
+      // Parse classes
+      this.parseClasses(content, chunks, filePath, language, imports, exports);
+      
+      // Parse variables/constants
+      this.parseVariables(content, chunks, filePath, language, imports, exports);
+      
+    } catch (error) {
+      console.warn(`Error in regex parsing for ${filePath}:`, error);
+    }
+  }
+
+  private parseImports(content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[]): void {
+    // Match import statements with improved regex
+    const importRegex = /^(\s*)import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\w+))?\s+from\s+)?['"`]([^'"`]+)['"`]\s*;?$/gm;
+    
+    let match;
+    while ((match = importRegex.exec(content)) !== null) {
+      try {
+        const fullMatch = match[0];
+        const source = match[2];
+        const startPos = match.index;
+        const endPos = startPos + fullMatch.length;
+        
+        // Calculate line numbers
+        const beforeMatch = content.substring(0, startPos);
+        const startLine = beforeMatch.split('\n').length;
+        const endLine = startLine + fullMatch.split('\n').length - 1;
+        
+        imports.push(source);
+        
+        chunks.push(this.createChunk(
+          fullMatch.trim(),
+          'import',
+          filePath,
+          startLine,
+          endLine,
+          language,
+          {
+            dependencies: [source],
+            imports: [source],
+            exports: [],
+            keywords: ['import']
+          }
+        ));
+      } catch (error) {
+        console.warn(`Error processing import match:`, error);
+      }
+    }
+  }
+
+  private parseExports(content: string, chunks: CodeChunk[], filePath: string, language: string, exports: string[]): void {
+    // Match export statements
+    const exportRegex = /^(\s*)export\s+(?:default\s+)?(?:(?:async\s+)?function\s+(\w+)|class\s+(\w+)|(?:const|let|var)\s+(\w+)|interface\s+(\w+)|type\s+(\w+)|\{[^}]*\})/gm;
+    
+    let match;
+    while ((match = exportRegex.exec(content)) !== null) {
+      try {
+        const fullMatch = match[0];
+        const exportName = match[2] || match[3] || match[4] || match[5] || match[6] || 'default';
+        const startPos = match.index;
+        
+        // Calculate line numbers
+        const beforeMatch = content.substring(0, startPos);
+        const startLine = beforeMatch.split('\n').length;
+        
+        exports.push(exportName);
+        
+        chunks.push(this.createChunk(
+          fullMatch.trim(),
+          'export',
+          filePath,
+          startLine,
+          startLine,
+          language,
+          {
+            dependencies: [],
+            imports: [],
+            exports: [exportName],
+            keywords: ['export']
+          }
+        ));
+      } catch (error) {
+        console.warn(`Error processing export match:`, error);
+      }
+    }
+  }
+
+  private parseInterfaces(content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]): void {
+    // Match TypeScript interfaces with proper brace matching
+    const interfaceRegex = /^(\s*)(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+[\w\s,<>]+)?\s*\{/gm;
+    
+    let match;
+    while ((match = interfaceRegex.exec(content)) !== null) {
+      try {
+        const interfaceName = match[2];
+        const startPos = match.index;
+        const beforeMatch = content.substring(0, startPos);
+        const startLine = beforeMatch.split('\n').length;
+        
+        // Find the end of the interface by matching braces
+        const interfaceContent = this.extractBlockContent(content, startPos, '{', '}');
+        const endLine = startLine + interfaceContent.split('\n').length - 1;
+        
+        chunks.push(this.createChunk(
+          interfaceContent,
+          'interface',
+          filePath,
+          startLine,
+          endLine,
+          language,
+          {
+            dependencies: imports,
+            imports: imports,
+            exports: exports,
+            keywords: this.extractKeywords(interfaceContent)
+          },
+          interfaceName
+        ));
+      } catch (error) {
+        console.warn(`Error processing interface match:`, error);
+      }
+    }
+  }
+
+  private parseTypeAliases(content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]): void {
+    // Match TypeScript type aliases
+    const typeRegex = /^(\s*)(?:export\s+)?type\s+(\w+)\s*=\s*[^;]+;?$/gm;
+    
+    let match;
+    while ((match = typeRegex.exec(content)) !== null) {
+      try {
+        const typeName = match[2];
+        const fullMatch = match[0];
+        const startPos = match.index;
+        const beforeMatch = content.substring(0, startPos);
+        const startLine = beforeMatch.split('\n').length;
+        const endLine = startLine + fullMatch.split('\n').length - 1;
+        
+        chunks.push(this.createChunk(
+          fullMatch.trim(),
+          'type',
+          filePath,
+          startLine,
+          endLine,
+          language,
+          {
+            dependencies: imports,
+            imports: imports,
+            exports: exports,
+            keywords: this.extractKeywords(fullMatch)
+          },
+          typeName
+        ));
+      } catch (error) {
+        console.warn(`Error processing type alias match:`, error);
+      }
+    }
+  }
+
+  private parseFunctions(content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]): void {
+    // Match regular function declarations
+    const functionDeclRegex = /^(\s*)(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*(?::\s*[^{]+)?\s*\{/gm;
+    
+    // Match arrow functions assigned to variables
+    const arrowFunctionRegex = /^(\s*)(?:export\s+)?(?:const|let|var)\s+(\w+)\s*[:=]\s*(?:async\s+)?\([^)]*\)\s*=>/gm;
+    
+    // Process regular functions
+    let match;
+    while ((match = functionDeclRegex.exec(content)) !== null) {
+      try {
+        const functionName = match[2];
+        const startPos = match.index;
+        const beforeMatch = content.substring(0, startPos);
+        const startLine = beforeMatch.split('\n').length;
+        
+        const functionContent = this.extractBlockContent(content, startPos, '{', '}');
+        const endLine = startLine + functionContent.split('\n').length - 1;
+        
+        chunks.push(this.createChunk(
+          functionContent,
+          'function',
+          filePath,
+          startLine,
+          endLine,
+          language,
+          {
+            dependencies: imports,
+            imports: imports,
+            exports: exports,
+            keywords: this.extractKeywords(functionContent)
+          },
+          functionName
+        ));
+      } catch (error) {
+        console.warn(`Error processing function declaration:`, error);
+      }
+    }
+    
+    // Process arrow functions
+    while ((match = arrowFunctionRegex.exec(content)) !== null) {
+      try {
+        const functionName = match[2];
+        const startPos = match.index;
+        const beforeMatch = content.substring(0, startPos);
+        const startLine = beforeMatch.split('\n').length;
+        
+        const functionContent = this.extractArrowFunctionContent(content, startPos);
+        const endLine = startLine + functionContent.split('\n').length - 1;
+        
+        chunks.push(this.createChunk(
+          functionContent,
+          'function',
+          filePath,
+          startLine,
+          endLine,
+          language,
+          {
+            dependencies: imports,
+            imports: imports,
+            exports: exports,
+            keywords: this.extractKeywords(functionContent)
+          },
+          functionName
+        ));
+      } catch (error) {
+        console.warn(`Error processing arrow function:`, error);
+      }
+    }
+  }
+
+  private parseClasses(content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]): void {
+    // Match class declarations
+    const classRegex = /^(\s*)(?:export\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+[\w<>]+)?(?:\s+implements\s+[\w\s,<>]+)?\s*\{/gm;
+    
+    let match;
+    while ((match = classRegex.exec(content)) !== null) {
+      try {
+        const className = match[2];
+        const startPos = match.index;
+        const beforeMatch = content.substring(0, startPos);
+        const startLine = beforeMatch.split('\n').length;
+        
+        const classContent = this.extractBlockContent(content, startPos, '{', '}');
+        const endLine = startLine + classContent.split('\n').length - 1;
+        
+        chunks.push(this.createChunk(
+          classContent,
+          'class',
+          filePath,
+          startLine,
+          endLine,
+          language,
+          {
+            dependencies: imports,
+            imports: imports,
+            exports: exports,
+            keywords: this.extractKeywords(classContent)
+          },
+          className
+        ));
+      } catch (error) {
+        console.warn(`Error processing class match:`, error);
+      }
+    }
+  }
+
+  private parseVariables(content: string, chunks: CodeChunk[], filePath: string, language: string, imports: string[], exports: string[]): void {
+    // Match variable declarations (excluding those already captured as functions)
+    const varRegex = /^(\s*)(?:export\s+)?(?:const|let|var)\s+(\w+)\s*[:=]\s*(?!(?:async\s+)?\([^)]*\)\s*=>)[^;]*;?$/gm;
+    
+    let match;
+    while ((match = varRegex.exec(content)) !== null) {
+      try {
+        const varName = match[2];
+        const fullMatch = match[0];
+        const startPos = match.index;
+        const beforeMatch = content.substring(0, startPos);
+        const startLine = beforeMatch.split('\n').length;
+        const endLine = startLine + fullMatch.split('\n').length - 1;
+        
+        // Determine if this is likely a function assignment
+        const isFunctionAssignment = fullMatch.includes('function') || fullMatch.includes('=>');
+        const chunkType = isFunctionAssignment ? 'function' : 'variable';
+        
+        chunks.push(this.createChunk(
+          fullMatch.trim(),
+          chunkType,
+          filePath,
+          startLine,
+          endLine,
+          language,
+          {
+            dependencies: imports,
+            imports: imports,
+            exports: exports,
+            keywords: this.extractKeywords(fullMatch)
+          },
+          varName
+        ));
+      } catch (error) {
+        console.warn(`Error processing variable match:`, error);
+      }
+    }
   }
 
   /**
@@ -626,31 +749,87 @@ export class SemanticChunker {
    * Generate unique chunk ID
    */
   private generateChunkId(filePath: string, startLine: number, endLine: number, content: string): string {
-    const hash = crypto.SHA256(`${filePath}:${startLine}-${endLine}:${content.substring(0, 100)}`).toString();
+    // Use Node.js built-in crypto instead of crypto-js
+    const hash = createHash('sha256').update(`${filePath}:${startLine}-${endLine}:${content.substring(0, 100)}`).digest('hex');
     return `chunk_${hash.substring(0, 16)}`;
   }
 
   /**
-   * Extract content from AST node
+   * Extract block content by matching opening and closing braces
    */
-  private getNodeContent(sourceCode: string, node: t.Node): string {
-    if (!node.loc) return '';
+  private extractBlockContent(content: string, startPos: number, openChar: string, closeChar: string): string {
+    let braceCount = 0;
+    let i = startPos;
+    let started = false;
     
-    const lines = sourceCode.split('\n');
-    const startLine = node.loc.start.line - 1;
-    const endLine = node.loc.end.line - 1;
-    
-    if (startLine === endLine) {
-      return lines[startLine].substring(node.loc.start.column, node.loc.end.column);
+    // Find the opening brace
+    while (i < content.length) {
+      if (content[i] === openChar) {
+        if (!started) {
+          started = true;
+        }
+        braceCount++;
+      } else if (content[i] === closeChar) {
+        braceCount--;
+      }
+      
+      i++;
+      
+      if (started && braceCount === 0) {
+        break;
+      }
     }
     
-    let content = lines[startLine].substring(node.loc.start.column) + '\n';
-    for (let i = startLine + 1; i < endLine; i++) {
-      content += lines[i] + '\n';
-    }
-    content += lines[endLine].substring(0, node.loc.end.column);
+    return content.substring(startPos, i);
+  }
+
+  /**
+   * Extract arrow function content including its body
+   */
+  private extractArrowFunctionContent(content: string, startPos: number): string {
+    let i = startPos;
+    let braceCount = 0;
+    let parenCount = 0;
+    let inString = false;
+    let stringChar = '';
+    let foundArrow = false;
     
-    return content;
+    // Find the complete arrow function
+    while (i < content.length) {
+      const char = content[i];
+      
+      if (!inString) {
+        if (char === '"' || char === "'" || char === '`') {
+          inString = true;
+          stringChar = char;
+        } else if (char === '(') {
+          parenCount++;
+        } else if (char === ')') {
+          parenCount--;
+        } else if (char === '{') {
+          braceCount++;
+        } else if (char === '}') {
+          braceCount--;
+          if (foundArrow && braceCount === 0) {
+            return content.substring(startPos, i + 1);
+          }
+        } else if (char === '=' && i + 1 < content.length && content[i + 1] === '>') {
+          foundArrow = true;
+          i++; // Skip the '>'
+        } else if (foundArrow && braceCount === 0 && (char === ';' || char === '\n')) {
+          return content.substring(startPos, i);
+        }
+      } else {
+        if (char === stringChar && (i === 0 || content[i - 1] !== '\\')) {
+          inString = false;
+        }
+      }
+      
+      i++;
+    }
+    
+    // If we reach here, return what we have
+    return content.substring(startPos, i);
   }
 
   /**

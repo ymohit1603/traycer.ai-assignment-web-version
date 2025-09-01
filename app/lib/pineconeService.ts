@@ -3,7 +3,8 @@ import { CodeChunk } from './semanticChunking';
 import { EmbeddingResult } from './vectorEmbeddings';
 
 export interface PineconeChunkMetadata {
-  filePath: string;
+  filePath: string; // Obfuscated path for privacy
+  originalFilePath: string; // Original file path for retrieval
   fileName: string;
   language: string;
   type: string;
@@ -19,6 +20,7 @@ export interface PineconeChunkMetadata {
   codebaseId: string;
   timestamp: number;
   contentPreview: string; // First 200 chars of content
+  text?: string; // Full chunk content for fallback (when available)
   [key: string]: any; // Index signature for Pinecone compatibility
 }
 
@@ -55,6 +57,7 @@ export type ProgressCallback = (progress: UpsertProgress) => void;
 export class PineconeService {
   private pinecone: Pinecone;
   private indexName: string;
+  private indexHost: string;
   private dimension: number = 1024; // Voyage AI embedding dimension
   private batchSize: number = 100; // Pinecone batch upsert limit
 
@@ -62,9 +65,10 @@ export class PineconeService {
     apiKey?: string, 
     environment?: string, 
     indexName: string = 'traycer-codebase-vectors',
-    dimension?: number
+    dimension?: number,
+    indexHost: string = 'https://traycer-codebase-vectors-8sm9xfe.svc.aped-4627-b74a.pinecone.io'
   ) {
-    const key = apiKey || process.env.PINECONE_API_KEY;
+    const key = process.env.PINECONE_API_KEY;
     
     if (!key) {
       throw new Error('Pinecone API key not found. Please set PINECONE_API_KEY environment variable.');
@@ -75,12 +79,22 @@ export class PineconeService {
     });
 
     this.indexName = indexName;
+    this.indexHost = indexHost;
     
     // Update dimension if provided
     if (dimension) {
       this.dimension = dimension;
       console.log(`📏 Pinecone dimension set to: ${this.dimension}`);
     }
+    
+    console.log(`🔗 Pinecone index host set to: ${this.indexHost}`);
+  }
+
+  /**
+   * Get index instance with serverless host for data plane operations
+   */
+  private getIndex() {
+    return this.pinecone.index(this.indexName, this.indexHost);
   }
 
   /**
@@ -95,10 +109,11 @@ export class PineconeService {
       const existingIndex = indexList.indexes?.find(idx => idx.name === this.indexName);
 
       if (existingIndex) {
-        // Check if dimensions match
+        // Check if dimensions match using describeIndexStats
         try {
-          const indexInfo = await this.pinecone.describeIndex(this.indexName);
-          const indexDimension = indexInfo.dimension;
+          const index = this.getIndex();
+          const indexStats = await index.describeIndexStats();
+          const indexDimension = indexStats.dimension;
           
           if (indexDimension !== this.dimension) {
             console.warn(`⚠️ Dimension mismatch: Index has ${indexDimension}, but we need ${this.dimension}`);
@@ -116,7 +131,7 @@ export class PineconeService {
             return;
           }
         } catch (describeError) {
-          console.warn(`⚠️ Could not describe existing index, proceeding to recreate:`, describeError);
+          console.warn(`⚠️ Could not describe existing index stats, proceeding to recreate:`, describeError);
           
           try {
             await this.pinecone.deleteIndex(this.indexName);
@@ -158,8 +173,11 @@ export class PineconeService {
   private async waitForIndexReady(maxAttempts: number = 60): Promise<void> {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const indexInfo = await this.pinecone.describeIndex(this.indexName);
-        if (indexInfo.status?.ready) {
+        // First check if index exists via control plane
+        const indexList = await this.pinecone.listIndexes();
+        const indexExists = indexList.indexes?.find(idx => idx.name === this.indexName);
+        
+        if (indexExists && indexExists.status?.ready) {
           return;
         }
       } catch (error) {
@@ -196,7 +214,7 @@ export class PineconeService {
       console.log(`✅ Embedding dimensions validated: ${firstEmbedding.length}`);
     }
 
-    const index = this.pinecone.index(this.indexName);
+    const index = this.getIndex();
     
     // Create vectors from chunks and embeddings
     const vectors: PineconeVector[] = [];
@@ -214,6 +232,7 @@ export class PineconeService {
         values: embedding,
         metadata: {
           filePath: this.obfuscateFilePath(chunk.filePath),
+          originalFilePath: chunk.filePath, // Store original path for retrieval
           fileName: chunk.filePath.split('/').pop() || '',
           language: chunk.metadata.language,
           type: chunk.type,
@@ -228,7 +247,8 @@ export class PineconeService {
           parentChunk: chunk.parentChunk,
           codebaseId,
           timestamp: Date.now(),
-          contentPreview: chunk.content.substring(0, 200)
+          contentPreview: chunk.content.substring(0, 200),
+          text: chunk.content.length <= 2000 ? chunk.content : undefined // Store full content if small enough
         }
       };
 
@@ -297,7 +317,7 @@ export class PineconeService {
     try {
       console.log(`🔍 Searching for similar chunks (topK: ${topK})`);
       
-      const index = this.pinecone.index(this.indexName);
+      const index = this.getIndex();
       
       const queryRequest: {
         vector: number[];
@@ -386,15 +406,27 @@ export class PineconeService {
     try {
       console.log(`🗑️ Deleting chunks for codebase: ${codebaseId}`);
       
-      const index = this.pinecone.index(this.indexName);
+      const index = this.getIndex();
       
-      await index.deleteMany({
+      // Query first to get IDs, then delete by IDs (filter-based delete is deprecated)
+      const queryResponse = await index.query({
+        vector: new Array(this.dimension).fill(0),
+        topK: 10000,
         filter: {
           codebaseId: { $eq: codebaseId }
-        }
+        },
+        includeMetadata: false
       });
-
-      console.log(`✅ Deleted chunks for codebase: ${codebaseId}`);
+      
+      const idsToDelete = queryResponse.matches?.map(match => match.id) || [];
+      
+      if (idsToDelete.length > 0) {
+        console.log(`Found ${idsToDelete.length} chunks to delete`);
+        await index.deleteMany(idsToDelete);
+        console.log(`✅ Deleted ${idsToDelete.length} chunks for codebase: ${codebaseId}`);
+      } else {
+        console.log(`ℹ️ No chunks found for codebase: ${codebaseId}`);
+      }
     } catch (error) {
       console.error('❌ Error deleting codebase chunks:', error);
       throw error;
@@ -408,11 +440,9 @@ export class PineconeService {
     try {
       console.log(`🗑️ Deleting ${chunkIds.length} specific chunks`);
       
-      const index = this.pinecone.index(this.indexName);
+      const index = this.getIndex();
       
-      await index.deleteMany({
-        ids: chunkIds
-      });
+      await index.deleteMany(chunkIds);
 
       console.log(`✅ Deleted ${chunkIds.length} chunks`);
     } catch (error) {
@@ -430,7 +460,7 @@ export class PineconeService {
     indexFullness: number;
   }> {
     try {
-      const index = this.pinecone.index(this.indexName);
+      const index = this.getIndex();
       const stats = await index.describeIndexStats();
       
       return {
@@ -452,7 +482,7 @@ export class PineconeService {
     metadata: Partial<PineconeChunkMetadata>
   ): Promise<void> {
     try {
-      const index = this.pinecone.index(this.indexName);
+      const index = this.getIndex();
       
       await index.update({
         id: chunkId,
@@ -579,9 +609,10 @@ export class PineconeService {
         };
       }
 
-      // Check if index is ready
-      const indexInfo = await this.pinecone.describeIndex(this.indexName);
-      const indexReady = indexInfo.status?.ready || false;
+      // Check if index is ready using control plane
+      const indexList2 = await this.pinecone.listIndexes();
+      const indexInfo = indexList2.indexes?.find(idx => idx.name === this.indexName);
+      const indexReady = indexInfo?.status?.ready || false;
 
       if (!indexReady) {
         return {

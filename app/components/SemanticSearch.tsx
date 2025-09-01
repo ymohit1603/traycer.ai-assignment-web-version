@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import FileReadingIndicator, { useFileReadingProgress } from './FileReadingIndicator';
+import { PayloadPruner, PayloadValidationResult } from '../lib/payloadPruning';
+import { StoredCodebase, StorageManager } from '../lib/storageManager';
 
 export interface SemanticSearchResult {
   success: boolean;
@@ -72,14 +74,16 @@ interface SemanticSearchProps {
   codebaseId: string;
   onResultsFound: (results: SemanticSearchResult) => void;
   className?: string;
+  storedCodebase?: StoredCodebase; // Optional codebase to send with requests
 }
 
-export default function SemanticSearch({ codebaseId, onResultsFound, className }: SemanticSearchProps) {
+export default function SemanticSearch({ codebaseId, onResultsFound, className, storedCodebase }: SemanticSearchProps) {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [indexStatus, setIndexStatus] = useState<'unknown' | 'indexed' | 'not-indexed'>('unknown');
   const [lastResults, setLastResults] = useState<SemanticSearchResult | null>(null);
+  const [payloadValidation, setPayloadValidation] = useState<PayloadValidationResult | null>(null);
   
   const {
     progress: readingProgress,
@@ -114,6 +118,43 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
       setIndexStatus('not-indexed');
     }
   }, [codebaseId, checkIndexStatus]);
+
+  // Validate payload when storedCodebase changes
+  useEffect(() => {
+    if (storedCodebase) {
+      try {
+        console.log('🔍 StoredCodebase for validation:', {
+          id: storedCodebase.metadata?.id,
+          filesCount: storedCodebase.files?.length || 0,
+          hasSearchIndex: !!storedCodebase.searchIndex,
+          sampleFile: storedCodebase.files?.[0] ? {
+            path: storedCodebase.files[0].filePath,
+            hasContent: !!storedCodebase.files[0].content,
+            contentLength: storedCodebase.files[0].content?.length || 0
+          } : 'no files'
+        });
+        
+        const prunedCodebase = PayloadPruner.pruneCodebaseForTransmission(storedCodebase);
+        const validation = PayloadPruner.validatePayload(prunedCodebase);
+        setPayloadValidation(validation);
+        
+        if (!validation.isValid) {
+          console.warn('⚠️ Codebase payload validation failed:', validation.error);
+        } else {
+          console.log(`✅ Codebase payload validated: ${(validation.size / 1024).toFixed(1)}KB`);
+        }
+      } catch (error) {
+        console.error('❌ Error validating payload:', error);
+        setPayloadValidation({
+          isValid: false,
+          size: 0,
+          error: 'Failed to validate payload'
+        });
+      }
+    } else {
+      setPayloadValidation(null);
+    }
+  }, [storedCodebase]);
 
   const indexCodebase = async () => {
     if (isIndexing) return;
@@ -237,11 +278,42 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
       return;
     }
 
+    // Check payload validation if we have a stored codebase
+    if (storedCodebase && payloadValidation && !payloadValidation.isValid) {
+      // For the "no files" case, we can still search but with server-side fallback
+      if (payloadValidation.error?.includes('No files available')) {
+        console.log('🔄 No local files available, falling back to server-side search');
+        toast('Using server-side search (local files not available)', { icon: 'ℹ️' });
+        // Continue with search but without client payload
+      } else {
+        // For other validation errors, stop the search
+        toast.error(`Cannot send codebase data: ${payloadValidation.error}`);
+        if (payloadValidation.suggestions) {
+          console.warn('💡 Suggestions:', payloadValidation.suggestions);
+          toast.error(`Suggestions: ${payloadValidation.suggestions.join('; ')}`);
+        }
+        return;
+      }
+    }
+
     setIsSearching(true);
     resetProgress();
 
     try {
       console.log(`🔍 Performing semantic search: "${query}"`);
+
+      // Prepare payload
+      let prunedCodebase = null;
+      const shouldIncludePayload = storedCodebase && 
+        payloadValidation?.isValid && 
+        !payloadValidation.error?.includes('No files available');
+        
+      if (shouldIncludePayload) {
+        prunedCodebase = PayloadPruner.pruneCodebaseForTransmission(storedCodebase);
+        console.log(`📦 Including complete codebase payload: ${(payloadValidation.size / 1024).toFixed(1)}KB`);
+      } else {
+        console.log('🔍 Searching without codebase payload (server-side lookup only)');
+      }
 
       // Start progress tracking for search
       startProgress({
@@ -251,27 +323,31 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
         totalFiles: 0
       });
 
+      const requestBody = {
+        action: 'search-with-context',
+        query,
+        codebaseId,
+        options: {
+          maxResults: 15,
+          relevanceThreshold: 0.5,
+          includeRelated: true,
+          contextWindow: 5
+        },
+        assemblyOptions: {
+          maxFiles: 8,
+          maxSnippets: 20,
+          contextLines: 5,
+          includeFullFiles: false,
+          relevanceThreshold: 0.5
+        },
+        // Include complete codebase if available and valid
+        ...(prunedCodebase && { prunedCodebase })
+      };
+
       const response = await fetch('/api/semantic-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'search-with-context',
-          query,
-          codebaseId,
-          options: {
-            maxResults: 15,
-            relevanceThreshold: 0.7,
-            includeRelated: true,
-            contextWindow: 5
-          },
-          assemblyOptions: {
-            maxFiles: 8,
-            maxSnippets: 20,
-            contextLines: 5,
-            includeFullFiles: false,
-            relevanceThreshold: 0.7
-          }
-        })
+        body: JSON.stringify(requestBody)
       });
 
       updateProgress({
@@ -441,6 +517,51 @@ export default function SemanticSearch({ codebaseId, onResultsFound, className }
             </button>
           </div>
         </div>
+
+        {/* Payload Status */}
+        {payloadValidation && (
+          <div className={`p-3 rounded-lg border ${
+            payloadValidation.isValid 
+              ? 'bg-green-900 bg-opacity-20 border-green-700 text-green-400'
+              : payloadValidation.error?.includes('No files available')
+                ? 'bg-blue-900 bg-opacity-20 border-blue-700 text-blue-400'
+                : 'bg-red-900 bg-opacity-20 border-red-700 text-red-400'
+          }`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium">
+                {payloadValidation.isValid 
+                  ? '🔒 Privacy-First Search' 
+                  : payloadValidation.error?.includes('No files available')
+                    ? '🗄️ Server-Side Search'
+                    : '⚠️ Payload Issue'}
+              </span>
+              <span className="text-xs opacity-80">
+                {(payloadValidation.size / 1024).toFixed(1)}KB
+              </span>
+            </div>
+            
+            {payloadValidation.isValid ? (
+              <p className="text-xs opacity-80">
+                Codebase metadata will be sent securely with search requests (no server storage)
+              </p>
+            ) : payloadValidation.error?.includes('No files available') ? (
+              <p className="text-xs opacity-80">
+                Search will use server-side codebase lookup (files not stored locally)
+              </p>
+            ) : (
+              <div>
+                <p className="text-xs mb-1">{payloadValidation.error}</p>
+                {payloadValidation.suggestions && (
+                  <ul className="text-xs opacity-80 list-disc list-inside">
+                    {payloadValidation.suggestions.map((suggestion, i) => (
+                      <li key={i}>{suggestion}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Search Tips */}
         <div className="bg-gray-800 bg-opacity-50 rounded-lg p-3">

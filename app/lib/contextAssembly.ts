@@ -2,6 +2,7 @@ import { EnhancedSearchResult, ContextualSearchResult } from './similaritySearch
 import { CodeChunk } from './semanticChunking';
 import { CodebaseIndex } from './codebaseParser';
 import { StoredCodebase, StorageManager } from './storageManager';
+import { PrunedStoredCodebase, PrunedCodebaseFile } from './payloadPruning';
 
 export interface AssembledContext {
   contextId: string;
@@ -98,7 +99,8 @@ export class ContextAssemblyService {
     searchResults: ContextualSearchResult,
     codebaseId: string,
     options: AssemblyOptions = {},
-    onFileRead?: FileReadProgressCallback
+    onFileRead?: FileReadProgressCallback,
+    clientCodebase?: PrunedStoredCodebase
   ): Promise<AssembledContext> {
     const startTime = Date.now();
     
@@ -110,14 +112,14 @@ export class ContextAssemblyService {
       maxSnippets = 20,
       contextLines = 5,
       includeFullFiles = false,
-      relevanceThreshold = 0.7,
+      relevanceThreshold = 0.5,
       groupByFile = true,
       includeDependencies = true
     } = options;
 
     try {
-      // Get codebase from storage
-      const codebase = await this.getCodebase(codebaseId);
+      // Get codebase from client-provided data or server storage
+      const codebase = await this.getCodebaseWithClientOverride(codebaseId, clientCodebase);
       
       // Filter and group results
       const relevantResults = searchResults.chunks
@@ -242,14 +244,14 @@ export class ContextAssemblyService {
     },
     onProgress?: FileReadProgressCallback
   ): Promise<FileContext | null> {
-    // Find the file in the codebase
-    const file = codebase.files.find(f => 
-      f.filePath === filePath || f.filePath.endsWith(filePath)
-    );
+    // Find the file in the codebase with improved path matching
+    const file = this.findFileInCodebase(codebase, filePath);
 
     if (!file || !file.content) {
       console.warn(`⚠️ File not found or has no content: ${filePath}`);
-      return null;
+      console.log(`🔄 Attempting fallback using chunk content for ${searchResults.length} search results`);
+      // FALLBACK: Use chunk content from search results instead of discarding
+      return this.createFileContextFromChunks(filePath, searchResults, options);
     }
 
     onProgress?.({
@@ -398,6 +400,114 @@ export class ContextAssemblyService {
   }
 
   /**
+   * Find file in codebase with improved path matching
+   */
+  private findFileInCodebase(codebase: StoredCodebase, filePath: string): CodebaseIndex | undefined {
+    // Try exact match first
+    let file = codebase.files.find(f => f.filePath === filePath);
+    if (file) return file;
+
+    // Try normalized paths (remove leading slash, handle relative paths)
+    const normalizedPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
+    file = codebase.files.find(f => 
+      f.filePath === normalizedPath || 
+      f.filePath.endsWith('/' + normalizedPath) ||
+      this.normalizeFilePath(f.filePath) === this.normalizeFilePath(filePath)
+    );
+    if (file) return file;
+
+    // Try filename match as last resort
+    const fileName = filePath.split('/').pop();
+    if (fileName) {
+      file = codebase.files.find(f => f.fileName === fileName);
+    }
+    
+    return file;
+  }
+
+  /**
+   * Normalize file path for comparison
+   */
+  private normalizeFilePath(path: string): string {
+    return path
+      .replace(/^\/+/, '') // Remove leading slashes
+      .replace(/\/+/g, '/') // Normalize multiple slashes
+      .toLowerCase();
+  }
+
+  /**
+   * Create file context from chunks when file is not found (FALLBACK LOGIC)
+   */
+  private createFileContextFromChunks(
+    filePath: string,
+    searchResults: EnhancedSearchResult[],
+    options: {
+      contextLines: number;
+      includeFullFiles: boolean;
+      includeDependencies: boolean;
+    }
+  ): FileContext {
+    console.log(`🔄 Creating fallback context from ${searchResults.length} chunks for: ${filePath}`);
+    
+    const fileName = filePath.split('/').pop() || filePath;
+    const language = searchResults[0]?.chunk?.metadata?.language || 'unknown';
+    
+    // Extract relevant sections from chunk content
+    const relevantSections: RelevantSection[] = [];
+    let totalLines = 0;
+    let fullContent = '';
+    
+    for (const result of searchResults) {
+      const chunk = result.chunk;
+      if (!chunk?.content) continue;
+      
+      // Create section from chunk content
+      const section: RelevantSection = {
+        startLine: chunk.startLine,
+        endLine: chunk.endLine,
+        content: chunk.content,
+        type: chunk.type,
+        name: chunk.name,
+        context: chunk.content, // Use full content as context
+        relevanceScore: result.score,
+        chunkId: result.chunkId
+      };
+      
+      relevantSections.push(section);
+      
+      // Accumulate for full content if requested
+      if (options.includeFullFiles) {
+        fullContent += chunk.content + '\n\n';
+      }
+      
+      totalLines += (chunk.endLine - chunk.startLine + 1);
+    }
+    
+    // Calculate aggregated relevance score
+    const relevanceScore = searchResults.reduce(
+      (sum, result) => sum + result.score, 0
+    ) / searchResults.length;
+    
+    // Extract imports/exports from chunks
+    const imports = [...new Set(searchResults.flatMap(r => r.chunk?.metadata?.imports || []))];
+    const exports = [...new Set(searchResults.flatMap(r => r.chunk?.metadata?.exports || []))];
+    
+    console.log(`✅ Created fallback context with ${relevantSections.length} sections, ${totalLines} lines`);
+    
+    return {
+      filePath,
+      fileName,
+      language,
+      fullContent: options.includeFullFiles ? fullContent.trim() : '',
+      relevantSections,
+      imports,
+      exports,
+      lineCount: totalLines,
+      relevanceScore
+    };
+  }
+
+  /**
    * Generate context summary
    */
   private generateContextSummary(
@@ -541,6 +651,89 @@ export class ContextAssemblyService {
   }
 
   /**
+   * Get codebase with client override support
+   */
+  private async getCodebaseWithClientOverride(
+    codebaseId: string, 
+    clientCodebase?: PrunedStoredCodebase
+  ): Promise<StoredCodebase> {
+    // Prefer client-provided codebase for privacy-first approach
+    if (clientCodebase) {
+      console.log(`🔒 Using client-provided codebase (privacy-first mode): ${clientCodebase.metadata.id}`);
+      return this.convertPrunedToStoredCodebase(clientCodebase);
+    }
+
+    // Fall back to server-side lookup
+    console.log(`🗄️ Attempting server-side codebase lookup: ${codebaseId}`);
+    return this.getCodebase(codebaseId);
+  }
+
+  /**
+   * Convert pruned codebase back to StoredCodebase format
+   */
+  private convertPrunedToStoredCodebase(prunedCodebase: PrunedStoredCodebase): StoredCodebase {
+    // Convert pruned files back to CodebaseIndex format
+    const files: CodebaseIndex[] = prunedCodebase.files.map(prunedFile => ({
+      fileId: prunedFile.fileId,
+      fileName: prunedFile.fileName,
+      filePath: prunedFile.filePath,
+      language: prunedFile.language,
+      content: prunedFile.contentPreview, // Use the complete content (not pruned anymore)
+      lines: prunedFile.lines,
+      size: prunedFile.size,
+      lastModified: prunedFile.lastModified,
+      functions: prunedFile.functions.map(f => ({ 
+        name: f.name, 
+        line: f.line,
+        params: [], // Not available in pruned format
+        returnType: '', // Not available in pruned format
+        isAsync: false, // Not available in pruned format
+        isExported: false // Not available in pruned format
+      })),
+      classes: prunedFile.classes.map(c => ({ 
+        name: c.name, 
+        line: c.line,
+        extends: '', // Not available in pruned format
+        implements: [], // Not available in pruned format
+        methods: [], // Not available in pruned format
+        properties: [] // Not available in pruned format
+      })),
+      imports: prunedFile.imports.map(i => ({ 
+        source: i.source, 
+        imports: [], // Not available in pruned format
+        line: 0 // Not available in pruned format
+      })),
+      exports: prunedFile.exports.map(e => ({ 
+        name: e.name, 
+        type: (e.type as "function" | "class" | "variable" | "interface" | "type" | "const") || "variable",
+        line: 0 // Not available in pruned format
+      })),
+      variables: prunedFile.variables.map(v => v.name),
+      interfaces: prunedFile.interfaces.map(i => ({ 
+        name: i.name, 
+        line: i.line,
+        extends: undefined, // Not available in pruned format
+        properties: [], // Not available in pruned format
+        methods: [] // Not available in pruned format
+      })),
+      types: prunedFile.types.map(t => ({ 
+        name: t.name, 
+        line: t.line,
+        type: 'type' as const,
+        isDefault: false
+      })),
+      keywords: prunedFile.keywords,
+      dependencies: prunedFile.dependencies
+    }));
+
+    return {
+      metadata: prunedCodebase.metadata,
+      files,
+      searchIndex: prunedCodebase.searchIndex
+    };
+  }
+
+  /**
    * Get codebase from storage with caching
    */
   private async getCodebase(codebaseId: string): Promise<StoredCodebase> {
@@ -550,7 +743,22 @@ export class ContextAssemblyService {
 
     const codebase = await StorageManager.getCodebase(codebaseId);
     if (!codebase) {
-      throw new Error(`Codebase not found: ${codebaseId}`);
+      console.warn(`⚠️ Codebase not found in StorageManager: ${codebaseId}`);
+      
+      // Check if this is a GitHub repository that might need re-import
+      if (codebaseId.startsWith('github_')) {
+        console.log(`💡 This appears to be a GitHub repository. You may need to re-import it to store metadata.`);
+      }
+      
+      // List available codebases for debugging
+      try {
+        const allCodebases = await StorageManager.getAllCodebaseMetadata();
+        console.log(`📋 Available codebases in storage:`, allCodebases.map(cb => cb.id));
+      } catch (e) {
+        console.warn(`Failed to list codebases:`, e);
+      }
+      
+      throw new Error(`Codebase not found: ${codebaseId}. Please ensure the codebase is properly imported and indexed, or provide codebase metadata with your search request.`);
     }
 
     this.codebaseCache.set(codebaseId, codebase);

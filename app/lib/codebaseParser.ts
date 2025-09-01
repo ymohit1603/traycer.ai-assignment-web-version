@@ -636,6 +636,7 @@ export class CodebaseParser {
   }
 
   private static generateFileId(fileName: string): string {
-    return btoa(fileName).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+    // Use Node.js Buffer instead of browser-only btoa
+    return Buffer.from(fileName).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
   }
 }

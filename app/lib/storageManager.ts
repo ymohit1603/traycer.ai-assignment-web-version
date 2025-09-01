@@ -37,7 +37,15 @@ export class StorageManager {
     replaceExisting = false
   ): Promise<string> {
     const codebaseId = this.generateCodebaseId(name);
-    
+    return this.storeCodebaseWithId(codebaseId, name, files, replaceExisting);
+  }
+
+  static async storeCodebaseWithId(
+    codebaseId: string,
+    name: string, 
+    files: CodebaseIndex[], 
+    replaceExisting = false
+  ): Promise<string> {
     // Check if codebase already exists
     const existing = await this.getCodebase(codebaseId);
     if (existing && !replaceExisting) {
@@ -93,7 +101,8 @@ export class StorageManager {
     try {
       const allCodebases = this.getAllCodebases();
       return allCodebases[codebaseId] || null;
-    } catch {
+    } catch (error) {
+      console.warn(`⚠️ Error retrieving codebase ${codebaseId}:`, error);
       return null;
     }
   }

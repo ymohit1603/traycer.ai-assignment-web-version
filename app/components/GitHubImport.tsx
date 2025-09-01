@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
+import { StorageManager } from '../lib/storageManager';
+import { CodebaseIndex } from '../lib/codebaseParser';
 
 export interface GitHubRepository {
   id: number;
@@ -36,11 +38,18 @@ export interface SyncProgress {
   totalFiles: number;
   currentFile?: string;
   errors: string[];
+  endTime?: number;
   result?: {
     syncId: string;
     commit: string;
     filesCount: number;
     merkleTreeHash: string;
+    webhookId?: number;
+    webhookSetup?: boolean;
+    codebaseFiles?: CodebaseIndex[]; // Files for client-side storage
+    targetCodebaseId?: string; // Codebase ID for storage
+    indexingCompleted?: boolean;
+    webhookInfo?: any;
   };
 }
 
@@ -218,13 +227,77 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
             console.log(`📊 Progress update: ${progress.phase} - ${progress.progress}% - ${progress.message}`);
             setSyncProgress(progress);
 
-            if (progress.phase === 'complete') {
+            // Check if sync is complete AND has the required result data
+            const isCompleteWithData = progress.phase === 'complete' && 
+              progress.result && 
+              progress.result.codebaseFiles && 
+              progress.result.targetCodebaseId;
+
+            const isCompleteWithError = progress.phase === 'complete' && 
+              (!progress.result || !progress.result.codebaseFiles || !progress.result.targetCodebaseId);
+
+            if (isCompleteWithData) {
               clearInterval(pollInterval);
               setIsSyncing(false);
               setShowRepoList(false);
+
+              // Store codebase metadata in localStorage
+              console.log('🔍 Sync complete with all required data:', {
+                hasResult: !!progress.result,
+                hasCodebaseFiles: !!progress.result?.codebaseFiles,
+                codebaseFilesCount: progress.result?.codebaseFiles?.length,
+                hasTargetCodebaseId: !!progress.result?.targetCodebaseId,
+                targetCodebaseId: progress.result?.targetCodebaseId
+              });
+
+              try {
+                console.log('💾 Storing codebase metadata in localStorage...');
+                console.log(`📁 Files to store: ${progress.result.codebaseFiles.length}`);
+                console.log(`🆔 Target codebase ID: ${progress.result.targetCodebaseId}`);
+                
+                await StorageManager.storeCodebaseWithId(
+                  progress.result.targetCodebaseId,
+                  repository.fullName,
+                  progress.result.codebaseFiles,
+                  true // Replace existing
+                );
+                console.log(`✅ Codebase metadata stored with ID: ${progress.result.targetCodebaseId}`);
+
+                // Verify storage by trying to retrieve it
+                const storedCodebase = await StorageManager.getCodebase(progress.result.targetCodebaseId);
+                console.log('🔍 Verification - stored codebase found:', !!storedCodebase);
+              } catch (storageError) {
+                console.warn('⚠️ Failed to store codebase metadata:', storageError);
+                // Don't fail the entire sync for storage issues
+              }
+
               onRepositoryImported(repository, progress);
               toast.success(`Repository ${repository.name} imported successfully!`);
               console.log('✅ GitHub sync completed successfully');
+            } else if (isCompleteWithError) {
+              // Sync marked as complete but missing essential data - continue polling for a bit longer
+              console.warn('⚠️ Sync marked complete but missing data - waiting for complete result...', {
+                hasResult: !!progress.result,
+                hasCodebaseFiles: !!progress.result?.codebaseFiles,
+                hasTargetCodebaseId: !!progress.result?.targetCodebaseId,
+                pollAttempts
+              });
+              
+              // Give it a few more attempts (30 seconds) to get the complete data
+              if (pollAttempts >= maxPollAttempts + 30) {
+                clearInterval(pollInterval);
+                setIsSyncing(false);
+                console.error('❌ Sync completed but result data is incomplete after extended wait');
+                toast.error('Sync completed but some data may be missing. Please try again.');
+              }
+            } else if (progress.phase === 'complete') {
+              // This shouldn't happen based on our logic above, but just in case
+              console.warn('⚠️ Unexpected complete state without proper validation');
+              clearInterval(pollInterval);
+              setIsSyncing(false);
+              onRepositoryImported(repository, progress);
+              toast.success(`Repository ${repository.name} imported successfully!`);
+              console.log('✅ GitHub sync completed (with possible missing data)');
             } else if (progress.phase === 'error') {
               clearInterval(pollInterval);
               setIsSyncing(false);
@@ -242,11 +315,14 @@ export default function GitHubImport({ onRepositoryImported, className, disabled
         } catch (error) {
           console.error('Error polling progress:', error);
 
-          // Continue polling even if there's a network error
+          // Continue polling even if there's a network error, but limit consecutive failures
           if (pollAttempts >= maxPollAttempts) {
             clearInterval(pollInterval);
             setIsSyncing(false);
             toast.error('Network error during sync. Please try again.');
+            console.error('❌ Max polling attempts reached with network errors');
+          } else {
+            console.warn(`⚠️ Polling error (attempt ${pollAttempts}/${maxPollAttempts}), continuing...`);
           }
         }
       }, 1000);

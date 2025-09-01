@@ -441,12 +441,39 @@ export class SimilaritySearchService {
         topK: context.maxResults || 10
       });
 
-      // Filter by relevance threshold
-      const relevantResults = searchResults.filter(
-        result => result.score >= (context.relevanceThreshold || 0.7)
-      );
+      // DEBUG: Log all search results with scores for debugging
+      console.log('🔍 DEBUG: All search results with scores:');
+      searchResults.slice(0, 10).forEach((result, index) => {
+        console.log(`  ${index + 1}. Score: ${result.score.toFixed(4)} | File: ${result.metadata.fileName} | Content: ${result.metadata.contentPreview?.substring(0, 100)}...`);
+      });
 
-      console.log(`📊 Found ${relevantResults.length} relevant results (${searchResults.length} total)`);
+      // Lower the relevance threshold and implement fallback strategy
+      const primaryThreshold = context.relevanceThreshold || 0.5; // Lowered from 0.7 to 0.5
+      const fallbackThreshold = 0.3; // Even lower threshold for fallback
+      
+      let relevantResults = searchResults.filter(result => result.score >= primaryThreshold);
+      
+      console.log(`📊 Found ${relevantResults.length} results above primary threshold ${primaryThreshold} (${searchResults.length} total)`);
+      
+      // If no results with primary threshold, try fallback threshold
+      if (relevantResults.length === 0) {
+        console.log(`🔄 No results with primary threshold, trying fallback threshold ${fallbackThreshold}`);
+        relevantResults = searchResults.filter(result => result.score >= fallbackThreshold);
+        console.log(`📊 Found ${relevantResults.length} results with fallback threshold`);
+      }
+      
+      // If still no results, implement keyword fallback search
+      if (relevantResults.length === 0) {
+        console.log(`🔄 No semantic results found, implementing keyword fallback search for: "${query}"`);
+        relevantResults = await this.performKeywordFallbackSearch(query, context, searchResults);
+        console.log(`📊 Keyword fallback found ${relevantResults.length} results`);
+      }
+      
+      // Ensure we always return at least the top 3 results if any exist
+      if (relevantResults.length === 0 && searchResults.length > 0) {
+        console.log(`🎯 No results met thresholds, returning top 3 results anyway`);
+        relevantResults = searchResults.slice(0, 3);
+      }
 
       // Enhance results with additional context
       const enhancedResults = await this.enhanceSearchResults(
@@ -505,7 +532,7 @@ export class SimilaritySearchService {
     const results = await this.search(searchQuery, {
       codebaseId,
       maxResults: 15,
-      relevanceThreshold: 0.6,
+      relevanceThreshold: 0.5,
       includeRelated: true
     });
 
@@ -548,7 +575,7 @@ export class SimilaritySearchService {
     const results = await this.search(searchQuery, {
       codebaseId,
       maxResults: 20,
-      relevanceThreshold: 0.75,
+      relevanceThreshold: 0.5,
       includeRelated: false
     });
 
@@ -559,6 +586,61 @@ export class SimilaritySearchService {
       ...results,
       contextSummary: `Similar ${patternType} patterns found in codebase`
     };
+  }
+
+  /**
+   * Perform keyword fallback search when semantic search fails
+   */
+  private async performKeywordFallbackSearch(
+    query: string,
+    context: SearchContext,
+    allResults: SearchResult[]
+  ): Promise<SearchResult[]> {
+    const queryWords = query.toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 2); // Filter out very short words
+    
+    console.log(`🔍 Keyword fallback searching for words: ${queryWords.join(', ')}`);
+    
+    const keywordMatches: Array<{ result: SearchResult; matchScore: number }> = [];
+    
+    for (const result of allResults) {
+      let matchScore = 0;
+      const content = (result.metadata.contentPreview || '').toLowerCase();
+      const fileName = (result.metadata.fileName || '').toLowerCase();
+      const functionName = (result.metadata.name || '').toLowerCase();
+      
+      // Score matches in different contexts
+      for (const word of queryWords) {
+        // Exact matches in function/class names get highest score
+        if (functionName.includes(word)) {
+          matchScore += 3;
+        }
+        // Matches in file names get medium score
+        if (fileName.includes(word)) {
+          matchScore += 2;
+        }
+        // Matches in content get base score
+        if (content.includes(word)) {
+          matchScore += 1;
+        }
+      }
+      
+      if (matchScore > 0) {
+        keywordMatches.push({ result, matchScore });
+      }
+    }
+    
+    // Sort by match score and take top results
+    keywordMatches.sort((a, b) => b.matchScore - a.matchScore);
+    const topMatches = keywordMatches.slice(0, context.maxResults || 10);
+    
+    console.log(`📊 Keyword search found ${topMatches.length} matches:`);
+    topMatches.slice(0, 5).forEach((match, index) => {
+      console.log(`  ${index + 1}. Score: ${match.matchScore} | File: ${match.result.metadata.fileName} | Function: ${match.result.metadata.name}`);
+    });
+    
+    return topMatches.map(match => match.result);
   }
 
   /**
@@ -611,12 +693,15 @@ export class SimilaritySearchService {
    * Reconstruct CodeChunk from Pinecone metadata
    */
   private reconstructChunkFromMetadata(metadata: PineconeChunkMetadata): CodeChunk {
+    // Use full text if available, otherwise fallback to contentPreview
+    const content = metadata.text || (metadata.contentPreview + (metadata.contentPreview.length >= 200 ? '...' : ''));
+    
     return {
       id: '', // Will be set by the calling function
-      content: metadata.contentPreview + '...', // Note: Full content not stored in metadata
+      content,
       type: metadata.type as CodeChunk['type'],
       name: metadata.name,
-      filePath: metadata.filePath,
+      filePath: metadata.originalFilePath || metadata.filePath, // Use original path for proper file resolution
       startLine: metadata.startLine,
       endLine: metadata.endLine,
       metadata: {
@@ -733,7 +818,7 @@ export class SimilaritySearchService {
     query: string
   ): string {
     if (results.length === 0) {
-      return `No relevant code found for query: "${query}"`;
+      return `No relevant code found for query: "${query}" - this should not happen with the new fallback system`;
     }
 
     const fileCount = new Set(results.map(r => r.metadata.fileName)).size;
@@ -745,7 +830,10 @@ export class SimilaritySearchService {
     const topType = Object.entries(typeDistribution)
       .sort(([,a], [,b]) => b - a)[0]?.[0] || 'code';
 
-    return `Found ${results.length} relevant ${topType} segments across ${fileCount} files for "${query}"`;
+    const avgScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
+    const searchMethod = avgScore > 0.5 ? 'semantic' : (avgScore > 0.3 ? 'semantic-fallback' : 'keyword-fallback');
+
+    return `Found ${results.length} relevant ${topType} segments across ${fileCount} files for "${query}" (${searchMethod} search, avg score: ${avgScore.toFixed(3)})`;
   }
 
   /**

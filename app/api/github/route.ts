@@ -11,6 +11,10 @@ interface SyncResult {
   merkleTreeHash?: string;
   webhookId?: number;
   webhookSetup?: boolean;
+  codebaseFiles?: any[]; // Files for client-side storage
+  targetCodebaseId?: string; // Codebase ID for storage
+  indexingCompleted?: boolean;
+  webhookInfo?: any;
   changes?: {
     totalChanges: number;
     added: string[];
@@ -103,12 +107,45 @@ export async function POST(request: NextRequest) {
           repo,
           branch,
           (progress) => {
+            // Don't overwrite completed progress that has complete result data
+            const currentProgress = syncProgress.get(progressId);
+            if (currentProgress?.phase === 'complete' && 
+                currentProgress.result && 
+                currentProgress.result.codebaseFiles && 
+                currentProgress.result.targetCodebaseId) {
+              console.log(`🔒 Preserving completed progress with full result data, ignoring callback update`);
+              return;
+            }
+            
+            // Allow overwriting incomplete 'complete' phases or any other phase
             syncProgress.set(progressId, progress);
             console.log(`📊 Sync progress: ${progress.phase} - ${progress.progress}%`);
           }
         ).then(async (syncResult) => {
           // After sync, index the repository in the semantic search
           let webhookInfo: any = null;
+          
+          // Convert GitHub files to CodebaseIndex format (outside try block for scope)
+          const codebaseFiles = syncResult.files.map(file => ({
+            fileId: file.sha,
+            fileName: file.path.split('/').pop() || '',
+            filePath: file.path,
+            language: detectLanguageFromPath(file.path),
+            content: file.content,
+            lines: file.content.split('\n').length,
+            size: file.size,
+            lastModified: file.lastModified,
+            functions: [],
+            classes: [],
+            imports: [],
+            exports: [],
+            variables: [],
+            interfaces: [],
+            types: [],
+            keywords: [],
+            dependencies: []
+          }));
+          
           try {
             const searchService = new SimilaritySearchService(
               process.env.OPEN_AI_API || process.env.NEXT_PUBLIC_OPEN_AI_API,
@@ -117,27 +154,6 @@ export async function POST(request: NextRequest) {
             );
 
             await searchService.initialize();
-
-            // Convert GitHub files to CodebaseIndex format
-            const codebaseFiles = syncResult.files.map(file => ({
-              fileId: file.sha,
-              fileName: file.path.split('/').pop() || '',
-              filePath: file.path,
-              language: detectLanguageFromPath(file.path),
-              content: file.content,
-              lines: file.content.split('\n').length,
-              size: file.size,
-              lastModified: file.lastModified,
-              functions: [],
-              classes: [],
-              imports: [],
-              exports: [],
-              variables: [],
-              interfaces: [],
-              types: [],
-              keywords: [],
-              dependencies: []
-            }));
 
             // Index the repository with detailed progress
             console.log(`🔍 Starting indexing for ${codebaseFiles.length} files...`);
@@ -156,6 +172,9 @@ export async function POST(request: NextRequest) {
               }
             );
             console.log('✅ Indexing completed successfully');
+
+            // Note: Codebase metadata storage will be handled client-side
+            // since localStorage is not available in server environment
 
             // Set up webhook for automatic updates
             try {
@@ -240,22 +259,43 @@ export async function POST(request: NextRequest) {
             await RepositoryStorageService.storeRepositorySync(syncData);
 
             // Mark as complete
-            syncProgress.set(progressId, {
-              phase: 'complete',
+            const finalProgressData = {
+              phase: 'complete' as const,
               progress: 100,
               message: 'Repository sync, indexing, and webhook setup complete!',
               filesProcessed: syncResult.files.length,
               totalFiles: syncResult.files.length,
               errors: [],
+              endTime: Date.now(),
               result: {
                 syncId: syncResult.syncId,
                 commit: syncResult.commit,
                 filesCount: syncResult.files.length,
                 merkleTreeHash: syncResult.merkleTree.rootHash,
                 webhookId: webhookInfo?.webhookId,
-                webhookSetup: !!webhookInfo
+                webhookSetup: !!webhookInfo,
+                codebaseFiles: codebaseFiles, // Include files for client-side storage
+                targetCodebaseId: codebaseId || `github_${owner}_${repo}`,
+                indexingCompleted: true,
+                webhookInfo: webhookInfo
               }
+            };
+
+            console.log(`🔧 Setting final progress data for ${progressId}:`, {
+              hasResult: !!finalProgressData.result,
+              hasCodebaseFiles: !!finalProgressData.result?.codebaseFiles,
+              codebaseFilesCount: finalProgressData.result?.codebaseFiles?.length,
+              targetCodebaseId: finalProgressData.result?.targetCodebaseId
             });
+
+            // Ensure the final progress data overwrites any incomplete 'complete' state
+            const currentProgress = syncProgress.get(progressId);
+            if (currentProgress?.phase === 'complete' && 
+                (!currentProgress.result || !currentProgress.result.codebaseFiles || !currentProgress.result.targetCodebaseId)) {
+              console.log(`🔄 Overwriting incomplete complete state with final result data`);
+            }
+
+            syncProgress.set(progressId, finalProgressData);
 
             console.log(`✅ Repository sync, indexing, and webhook setup complete: ${progressId}`);
 
@@ -274,22 +314,43 @@ export async function POST(request: NextRequest) {
               }
             }
             
-            syncProgress.set(progressId, {
-              phase: 'complete', // Mark as complete since sync worked
+            const partialFailureProgressData = {
+              phase: 'complete' as const, // Mark as complete since sync worked
               progress: 100,
               message: 'Repository synced successfully (indexing partially failed)',
               filesProcessed: syncResult.files.length,
               totalFiles: syncResult.files.length,
               errors: [`Indexing warning: ${errorMessage}`],
+              endTime: Date.now(),
               result: {
                 syncId: syncResult.syncId,
                 commit: syncResult.commit,
                 filesCount: syncResult.files.length,
                 merkleTreeHash: syncResult.merkleTree.rootHash,
                 webhookId: webhookInfo?.webhookId,
-                webhookSetup: !!webhookInfo
+                webhookSetup: !!webhookInfo,
+                codebaseFiles: codebaseFiles, // Include files for client-side storage
+                targetCodebaseId: codebaseId || `github_${owner}_${repo}`,
+                indexingCompleted: false,
+                webhookInfo: webhookInfo
               }
+            };
+
+            console.log(`⚠️ Setting partial failure progress data for ${progressId}:`, {
+              hasResult: !!partialFailureProgressData.result,
+              hasCodebaseFiles: !!partialFailureProgressData.result?.codebaseFiles,
+              codebaseFilesCount: partialFailureProgressData.result?.codebaseFiles?.length,
+              targetCodebaseId: partialFailureProgressData.result?.targetCodebaseId
             });
+
+            // Ensure the partial failure progress data overwrites any incomplete 'complete' state
+            const currentProgress = syncProgress.get(progressId);
+            if (currentProgress?.phase === 'complete' && 
+                (!currentProgress.result || !currentProgress.result.codebaseFiles || !currentProgress.result.targetCodebaseId)) {
+              console.log(`🔄 Overwriting incomplete complete state with partial failure result data`);
+            }
+
+            syncProgress.set(progressId, partialFailureProgressData);
             
             console.log(`⚠️ Repository sync completed with indexing warnings: ${progressId}`);
           }
@@ -346,6 +407,17 @@ export async function POST(request: NextRequest) {
           oldMerkleTree,
           branch,
           (progress) => {
+            // Don't overwrite completed progress that has complete result data
+            const currentProgress = syncProgress.get(progressId);
+            if (currentProgress?.phase === 'complete' && 
+                currentProgress.result && 
+                currentProgress.result.codebaseFiles && 
+                currentProgress.result.targetCodebaseId) {
+              console.log(`🔒 Preserving completed incremental progress with full result data, ignoring callback update`);
+              return;
+            }
+            
+            // Allow overwriting incomplete 'complete' phases or any other phase
             syncProgress.set(progressId, progress);
           }
         ).then(async (incrementalResult) => {
@@ -521,6 +593,15 @@ export async function GET(request: NextRequest) {
           { status: 404 }
         );
       }
+
+      // Debug logging for progress data
+      console.log(`📊 Progress API returning data for ${progressId}:`, {
+        phase: progress.phase,
+        hasResult: !!progress.result,
+        hasCodebaseFiles: !!progress.result?.codebaseFiles,
+        codebaseFilesCount: progress.result?.codebaseFiles?.length,
+        targetCodebaseId: progress.result?.targetCodebaseId
+      });
 
       // Clean up completed progress after 5 minutes
       if (progress.phase === 'complete' || progress.phase === 'error') {

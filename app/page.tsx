@@ -402,25 +402,84 @@ export default function Home() {
 
     console.log(`📝 Prompt: "${prompt}"`);
 
-    // If no files are uploaded, start from scratch automatically
-    if (!uploadedFiles.length && !isIndexed) {
-      console.log('🆕 No codebase uploaded, starting from scratch...');
-      // Instead of showing project planning modal, handle it directly with clarifying questions
+    // Planning mode: Check for available codebase sources
+    console.log('🔍 Planning mode: Checking for available codebase sources...');
+    
+    // First, check if we already have a stored codebase (from GitHub sync or previous upload)
+    let targetCodebase = storedCodebase;
+    let codebaseSource = 'existing';
+    
+    // If no stored codebase, try to find GitHub synced codebase
+    if (!targetCodebase && importedFromGitHub && importedRepository) {
+      const githubCodebaseId = `github_${importedRepository.owner.login}_${importedRepository.name}`;
+      console.log(`🔍 Checking for GitHub synced codebase: ${githubCodebaseId}`);
+      
+      try {
+        targetCodebase = await StorageManager.getCodebase(githubCodebaseId);
+        if (targetCodebase) {
+          console.log(`✅ Found GitHub synced codebase: ${targetCodebase.metadata.totalFiles} files, ${targetCodebase.metadata.languages.join(', ')}`);
+          setStoredCodebase(targetCodebase);
+          codebaseSource = 'github-sync';
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not retrieve GitHub synced codebase:', error);
+      }
+    }
+    
+    // If still no codebase, check if we have uploaded files to index
+    if (!targetCodebase && uploadedFiles.length > 0) {
+      console.log(`🔍 No stored codebase found, will index ${uploadedFiles.length} uploaded files`);
+      codebaseSource = 'manual-upload';
+    }
+    
+    // If no files are uploaded and no stored codebase, start from scratch automatically
+    if (!targetCodebase && !uploadedFiles.length && !isIndexed) {
+      console.log('🆕 No codebase available, starting from scratch...');
       await handleStartFromScratch();
       return;
     }
+    
+    // If we have no codebase and no uploaded files, prompt user
+    if (!targetCodebase && uploadedFiles.length === 0) {
+      const errorMsg = importedFromGitHub 
+        ? 'GitHub repository was imported but no codebase data found. Please re-import the repository or upload files manually.'
+        : 'Please upload files or import a repository before generating a plan.';
+      toast.error(errorMsg);
+      return;
+    }
 
-    console.log(`📁 Found ${uploadedFiles.length} uploaded files`);
+    console.log(`📁 Codebase source: ${codebaseSource}, Files: ${targetCodebase?.metadata.totalFiles || uploadedFiles.length}`);
 
-    // First, index the uploaded codebase
+    // Start plan generation process
     setIsGeneratingPlan(true);
     setPlanError(null);
     setGeneratedPlan(null);
 
-    const loadingToast = toast.loading('Indexing codebase and generating plan...');
+    const loadingToast = toast.loading(
+      targetCodebase 
+        ? `Using ${codebaseSource} codebase to generate plan...`
+        : 'Indexing uploaded files and generating plan...'
+    );
 
     try {
-      console.log('🔍 Starting codebase indexing...');
+      // If we already have a codebase, skip indexing
+      if (targetCodebase) {
+        console.log(`🚀 Using existing codebase from ${codebaseSource}:`, {
+          id: targetCodebase.metadata.id,
+          files: targetCodebase.metadata.totalFiles,
+          languages: targetCodebase.metadata.languages
+        });
+        
+        toast.dismiss(loadingToast);
+        toast.loading('Generating implementation plan from stored codebase...');
+        
+        // Generate plan directly with existing codebase
+        await generatePlanFromPrompt(prompt, targetCodebase);
+        return;
+      }
+      
+      // Only index if we don't have a stored codebase
+      console.log('🔍 Starting codebase indexing for uploaded files...');
       setIsIndexing(true);
       setIsIndexed(false);
       setShowIndexingProgress(true);
@@ -530,7 +589,7 @@ export default function Home() {
       const plan = await openAIService.generateImplementationPlan(
         codebase!,
         promptText,
-        4000, // max tokens
+        1200, // max tokens
         (progress) => setPlanProgress(progress), // progress callback
         useDeepAnalysis // analysis mode
       );
@@ -641,7 +700,7 @@ Generate a complete project plan including:
           authentication: '',
           deployment: ''
         },
-        4000,
+        1200,
         (progress) => setPlanProgress(progress) // progress callback
       );
       
@@ -715,7 +774,7 @@ User Request: ${prompt}`;
       const plan = await openAIService.generateNewProjectPlan(
         projectPrompt,
         requirements,
-        4000,
+        1200,
         (progress) => setPlanProgress(progress) // progress callback
       );
       
@@ -792,7 +851,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
         refinedPlan = await openAIService.generateImplementationPlan(
           storedCodebase,
           contextualPrompt,
-          4000,
+          1200,
           (progress) => setPlanProgress(progress), // progress callback
           useDeepAnalysis // analysis mode
         );
@@ -896,31 +955,62 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
     setImportedRepository(repository);
     setGithubSyncProgress(syncProgress);
     
-    // Create a synthetic stored codebase from the GitHub repository
-    // Set it regardless of whether indexing is complete yet
-    const githubCodebase: StoredCodebase = {
-      metadata: {
-        id: `github_${repository.owner.login}_${repository.name}`,
-        name: repository.fullName,
-        totalFiles: syncProgress.result?.filesCount || 0,
-        totalSize: repository.size * 1024, // GitHub size is in KB
-        languages: repository.language ? [repository.language.toLowerCase()] : ['unknown'],
-        lastProcessed: Date.now(),
-        version: '1.0'
-      },
-      files: [], // Files are already indexed in Pinecone, no need to store locally
-      searchIndex: {
-        byKeyword: {},
-        byLanguage: {},
-        byFunction: {},
-        byClass: {},
-        byDependency: {},
-        byFileName: {},
-        byFilePath: {}
+    // Try to get the actual stored codebase first (which should have files)
+    const codebaseId = `github_${repository.owner.login}_${repository.name}`;
+    let githubCodebase: StoredCodebase | null = null;
+    
+    try {
+      githubCodebase = await StorageManager.getCodebase(codebaseId);
+      if (githubCodebase) {
+        console.log('✅ GitHub codebase successfully stored and retrieved:', {
+          id: githubCodebase.metadata.id,
+          filesCount: githubCodebase.files?.length || 0,
+          totalFiles: githubCodebase.metadata.totalFiles,
+          hasFiles: githubCodebase.files && githubCodebase.files.length > 0
+        });
+        
+        // Set this as the current stored codebase for planning mode
+        setStoredCodebase(githubCodebase);
+        
+        // Show success message indicating planning mode can now use this codebase
+        toast.success(`Repository ${repository.name} is ready for planning mode! 🚀`);
+        return;
       }
-    };
+    } catch (error) {
+      console.warn('⚠️ Could not retrieve GitHub stored codebase:', error);
+    }
+    
+    // If we couldn't get the stored codebase, create a synthetic one
+    if (!githubCodebase) {
+      console.log('📝 Creating synthetic codebase (files may not be available for privacy-first search)');
+      githubCodebase = {
+        metadata: {
+          id: codebaseId,
+          name: repository.fullName,
+          totalFiles: syncProgress.result?.filesCount || 0,
+          totalSize: repository.size * 1024, // GitHub size is in KB
+          languages: repository.language ? [repository.language.toLowerCase()] : ['unknown'],
+          lastProcessed: Date.now(),
+          version: '1.0'
+        },
+        files: [], // No files available - will fall back to server-side search
+        searchIndex: {
+          byKeyword: {},
+          byLanguage: {},
+          byFunction: {},
+          byClass: {},
+          byDependency: {},
+          byFileName: {},
+          byFilePath: {}
+        }
+      };
+    }
 
-    console.log('📦 Setting storedCodebase:', githubCodebase.metadata);
+    console.log('📦 Setting storedCodebase:', {
+      id: githubCodebase.metadata.id,
+      filesCount: githubCodebase.files?.length || 0,
+      hasFiles: githubCodebase.files && githubCodebase.files.length > 0
+    });
     setStoredCodebase(githubCodebase);
     
     // Set indexed state based on whether indexing was successful
@@ -1140,6 +1230,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                     codebaseId={storedCodebase.metadata.id}
                     onResultsFound={handleSemanticSearchResults}
                     className="w-full"
+                    storedCodebase={storedCodebase}
                   />
                 ) : (
                   <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">

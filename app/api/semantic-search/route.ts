@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SimilaritySearchService, SearchContext } from '../../lib/similaritySearch';
 import { ContextAssemblyService, AssemblyOptions } from '../../lib/contextAssembly';
+import { PrunedStoredCodebase } from '../../lib/payloadPruning';
 
 // Initialize services
 let searchService: SimilaritySearchService | null = null;
@@ -32,7 +33,8 @@ export async function POST(request: NextRequest) {
       query, 
       codebaseId, 
       options = {},
-      assemblyOptions = {}
+      assemblyOptions = {},
+      prunedCodebase
     } = body;
 
     console.log(`🔍 Semantic search API: ${action} for codebase ${codebaseId}`);
@@ -80,17 +82,79 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        console.log(`🧠 Searching with intelligent context assembly...`);
+        // Validate client-provided codebase if present
+        if (prunedCodebase) {
+          const payloadSize = JSON.stringify(prunedCodebase).length;
+          console.log(`📦 Client provided codebase payload: ${(payloadSize / 1024).toFixed(1)}KB`);
+          
+          // Safety: Check payload size limit (2MB)
+          const MAX_PAYLOAD_SIZE = 2 * 1024 * 1024; // 2MB
+          if (payloadSize > MAX_PAYLOAD_SIZE) {
+            console.warn(`⚠️ Payload too large: ${(payloadSize / 1024 / 1024).toFixed(1)}MB exceeds ${(MAX_PAYLOAD_SIZE / 1024 / 1024).toFixed(1)}MB limit`);
+            return NextResponse.json(
+              { 
+                error: 'Payload too large',
+                message: `Payload size ${(payloadSize / 1024 / 1024).toFixed(1)}MB exceeds ${(MAX_PAYLOAD_SIZE / 1024 / 1024).toFixed(1)}MB limit`,
+                success: false
+              },
+              { status: 413 }
+            );
+          }
 
-        // First, perform the semantic search
+          // Validate that the codebase IDs match
+          if (prunedCodebase.metadata?.id !== codebaseId) {
+            console.warn(`⚠️ Codebase ID mismatch: expected ${codebaseId}, got ${prunedCodebase.metadata?.id}`);
+            return NextResponse.json(
+              { 
+                error: 'Codebase ID mismatch',
+                message: `Expected ${codebaseId}, but received ${prunedCodebase.metadata?.id}`,
+                success: false
+              },
+              { status: 400 }
+            );
+          }
+
+          // Safety: Validate codebase structure
+          if (!prunedCodebase.metadata || !Array.isArray(prunedCodebase.files)) {
+            console.warn(`⚠️ Invalid codebase structure`);
+            return NextResponse.json(
+              { 
+                error: 'Invalid codebase structure',
+                message: 'Client-provided codebase must have valid metadata and files array',
+                success: false
+              },
+              { status: 400 }
+            );
+          }
+
+          // Log payload stats for debugging (no sensitive content)
+          if (prunedCodebase.payloadStats) {
+            console.log(`📊 Payload stats:`, {
+              size: `${(prunedCodebase.payloadStats.prunedSize / 1024).toFixed(1)}KB`,
+              files: `${prunedCodebase.payloadStats.filesIncluded}/${prunedCodebase.payloadStats.filesIncluded + prunedCodebase.payloadStats.filesExcluded}`,
+              compression: `${(prunedCodebase.payloadStats.compressionRatio * 100).toFixed(1)}%`
+            });
+          }
+
+          // Safety: Note that client data is used temporarily and not persisted
+          console.log(`🔒 Using client codebase data temporarily for search context (not persisted)`);
+        } else {
+          console.log(`🔍 No client payload provided, will attempt server-side codebase lookup`);
+        }
+
+        console.log(`🧠 Searching with intelligent context assembly...`);
+        console.log(`🔍 Query: "${query}" | Codebase: ${codebaseId} | Max results: ${options.maxResults || 15}`);
+
+        // First, perform the semantic search with improved thresholds
         const searchContext: SearchContext = {
           codebaseId,
           maxResults: options.maxResults || 15,
-          relevanceThreshold: options.relevanceThreshold || 0.7,
+          relevanceThreshold: options.relevanceThreshold || 0.5, // Lowered from 0.7 to 0.5
           includeRelated: true,
           contextWindow: options.contextWindow || 5
         };
 
+        console.log(`📊 Search context: relevance threshold ${searchContext.relevanceThreshold}, include related: ${searchContext.includeRelated}`);
         const searchResults = await searchService.search(query, searchContext);
 
         // Then, assemble intelligent context
@@ -103,11 +167,47 @@ export async function POST(request: NextRequest) {
           groupByFile: assemblyOptions.groupByFile !== false
         };
 
-        const assembledContext = await contextAssemblyService.assembleContext(
-          searchResults,
-          codebaseId,
-          assemblyOpts
-        );
+        // Assemble context with proper error handling
+        let assembledContext;
+        try {
+          assembledContext = await contextAssemblyService.assembleContext(
+            searchResults,
+            codebaseId,
+            assemblyOpts,
+            undefined, // onFileRead callback
+            prunedCodebase // Pass client-provided codebase
+          );
+        } catch (contextError) {
+          console.error(`❌ Context assembly failed:`, contextError);
+          
+          // If client provided codebase but context assembly failed, provide helpful error
+          if (prunedCodebase) {
+            return NextResponse.json(
+              { 
+                error: 'Context assembly failed with client data',
+                message: 'Failed to process client-provided codebase data. Please try re-importing your repository.',
+                success: false,
+                details: contextError instanceof Error ? contextError.message : 'Unknown error'
+              },
+              { status: 500 }
+            );
+          }
+          
+          // For server-side failures, suggest client-side solution
+          return NextResponse.json(
+            { 
+              error: 'Codebase not found on server',
+              message: 'Codebase metadata not available on server. Please ensure your repository is properly imported and indexed.',
+              success: false,
+              suggestions: [
+                'Re-import your GitHub repository to ensure metadata is stored locally',
+                'Check that the codebase ID matches your imported repository',
+                'Verify that the repository sync completed successfully'
+              ]
+            },
+            { status: 404 }
+          );
+        }
 
         return NextResponse.json({
           success: true,

@@ -574,23 +574,39 @@ export class VectorEmbeddingService {
   }
 
   /**
-   * Find most similar chunks to a query embedding
+   * Find most similar chunks to a query embedding with improved fallback strategy
    */
   static findSimilarChunks(
     queryEmbedding: number[],
     chunkEmbeddings: Array<{chunkId: string, embedding: number[]}>,
     topK: number = 10,
-    threshold: number = 0.7
+    threshold: number = 0.5 // Lowered from 0.7 to 0.5
   ): Array<{chunkId: string, similarity: number}> {
     const similarities = chunkEmbeddings.map(item => ({
       chunkId: item.chunkId,
       similarity: this.calculateSimilarity(queryEmbedding, item.embedding)
     }));
 
-    return similarities
-      .filter(item => item.similarity >= threshold)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, topK);
+    // Sort all results first
+    const sortedSimilarities = similarities.sort((a, b) => b.similarity - a.similarity);
+    
+    // Try with the threshold first
+    let results = sortedSimilarities.filter(item => item.similarity >= threshold);
+    
+    // If no results with threshold, try with a lower threshold
+    if (results.length === 0 && threshold > 0.3) {
+      console.log(`🔄 No results with threshold ${threshold}, trying lower threshold 0.3`);
+      results = sortedSimilarities.filter(item => item.similarity >= 0.3);
+    }
+    
+    // If still no results, return top-k regardless of threshold (as long as similarity > 0)
+    if (results.length === 0) {
+      console.log(`🎯 No results with any threshold, returning top ${topK} results regardless of score`);
+      results = sortedSimilarities.filter(item => item.similarity > 0).slice(0, topK);
+    }
+    
+    // Always return at least some results if they exist
+    return results.slice(0, topK);
   }
 
   /**
