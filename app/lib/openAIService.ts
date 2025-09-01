@@ -684,10 +684,37 @@ The goal is a complete, professional implementation plan that covers every aspec
       // Parse the new text-based format
       const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       
-      // Extract sections using regex patterns
-      const observationsMatch = response.match(/\*\*Observations\*\*([\s\S]*?)(?=\*\*Approach\*\*|$)/);
-      const approachMatch = response.match(/\*\*Approach\*\*([\s\S]*?)(?=\*\*Implementation Files\*\*|$)/);
-      const filesMatch = response.match(/\*\*Implementation Files\*\*([\s\S]*?)$/);
+      // Extract sections using multiple regex patterns for robustness
+      console.log('🔍 Starting section extraction from response...', {
+        responseLength: response.length,
+        hasObservations: response.includes('**Observations**') || response.includes('Observations'),
+        hasApproach: response.includes('**Approach**') || response.includes('Approach'),
+        hasImplementationFiles: response.includes('**Implementation Files**') || response.includes('Implementation Files')
+      });
+
+      // Try multiple patterns for each section to handle variations in AI responses
+      let observationsMatch = response.match(/\*\*Observations\*\*([\s\S]*?)(?=\*\*Approach\*\*|$)/i);
+      if (!observationsMatch) {
+        observationsMatch = response.match(/Observations[:\s]*([\s\S]*?)(?=\*\*Approach\*\*|Approach[:\s]|$)/i);
+      }
+
+      let approachMatch = response.match(/\*\*Approach\*\*([\s\S]*?)(?=\*\*Implementation Files\*\*|$)/i);
+      if (!approachMatch) {
+        approachMatch = response.match(/Approach[:\s]*([\s\S]*?)(?=\*\*Implementation Files\*\*|Implementation Files[:\s]|$)/i);
+      }
+
+      let filesMatch = response.match(/\*\*Implementation Files\*\*([\s\S]*?)$/i);
+      if (!filesMatch) {
+        filesMatch = response.match(/Implementation Files[:\s]*([\s\S]*?)$/i);
+      }
+      if (!filesMatch) {
+        // Look for "Files" section as well
+        filesMatch = response.match(/\*\*Files\*\*([\s\S]*?)$/i);
+      }
+      if (!filesMatch) {
+        // Last resort: look for any section that might contain file listings
+        filesMatch = response.match(/(?:Files to|Files needed|Create|Modify)[\s\S]*([\s\S]*?)$/i);
+      }
       
       const observations = observationsMatch ? observationsMatch[1].trim() : 'No observations provided';
       const approach = approachMatch ? approachMatch[1].trim() : 'No approach provided';
@@ -697,8 +724,99 @@ The goal is a complete, professional implementation plan that covers every aspec
       console.log('🔍 Parsing Implementation Files section...', {
         hasFilesMatch: !!filesMatch,
         filesContentLength: filesContent.length,
-        filesContentPreview: filesContent.substring(0, 300)
+        filesContentPreview: filesContent.substring(0, 300),
+        extractedSections: {
+          observations: observations.length,
+          approach: approach.length,
+          files: filesContent.length
+        }
       });
+
+      // If we still don't have files content, try to extract from the whole response
+      if (!filesContent || filesContent.length < 50) {
+        console.warn('⚠️ Primary file extraction failed, trying alternative methods...');
+        
+        // Look for any content that contains file names and descriptions
+        const alternativeMatch = response.match(/(.*\.(ts|tsx|js|jsx|py|java|cpp|cs|php|rb|go|rs|html|css|json|yml|md)[\s\S]*)/i);
+        if (alternativeMatch) {
+          const alternativeContent = alternativeMatch[0];
+          console.log('🔄 Found alternative file content:', {
+            length: alternativeContent.length,
+            preview: alternativeContent.substring(0, 200)
+          });
+          
+          // Use the alternative content if it's more substantial
+          if (alternativeContent.length > filesContent.length) {
+            console.log('✅ Using alternative file content extraction');
+            // Update filesContent to use the alternative
+            const updatedFilesContent = alternativeContent;
+            const fileEntries = this.parseFileEntries(updatedFilesContent);
+            
+            if (fileEntries.length > 0) {
+              console.log('🎯 Alternative extraction successful:', fileEntries.length, 'files');
+              // Continue with the successfully extracted files
+              const title = this.generatePlanTitle(context.userPrompt);
+              
+              const sections: PlanSection[] = [
+                {
+                  id: 'observations',
+                  title: 'Observations',
+                  type: 'overview',
+                  priority: 'high',
+                  content: observations,
+                  items: [{
+                    id: 'obs_item',
+                    type: 'overview',
+                    title: 'Current State Analysis',
+                    description: 'Analysis of existing codebase and requirements',
+                    details: observations,
+                    dependencies: [],
+                  }],
+                },
+                {
+                  id: 'approach',
+                  title: 'Approach',
+                  type: 'overview',
+                  priority: 'high',
+                  content: approach,
+                  items: [{
+                    id: 'approach_item',
+                    type: 'overview',
+                    title: 'Implementation Strategy',
+                    description: 'High-level approach and reasoning',
+                    details: approach,
+                    dependencies: [],
+                  }],
+                },
+                {
+                  id: 'files',
+                  title: 'Implementation Files',
+                  type: 'files',
+                  priority: 'high',
+                  content: `${fileEntries.length} files to create or modify`,
+                  items: fileEntries,
+                }
+              ];
+
+              return {
+                id: planId,
+                title,
+                overview: observations.length > 200 ? observations.substring(0, 200) + '...' : observations,
+                timestamp: Date.now(),
+                sections,
+                metadata: {
+                  totalFiles: fileEntries.length,
+                  affectedLanguages: context.languages,
+                  complexity: this.inferComplexity(fileEntries.length, context.userPrompt),
+                  estimatedTimeHours: this.estimateTimeFromEntries(fileEntries),
+                  tags: this.extractTags(context.userPrompt, context.languages),
+                  relatedFiles: fileEntries.map(item => item.filePath || '').filter(Boolean),
+                },
+              };
+            }
+          }
+        }
+      }
       
       const fileEntries = this.parseFileEntries(filesContent);
       
@@ -808,25 +926,89 @@ The goal is a complete, professional implementation plan that covers every aspec
     
     console.log('📝 Starting file entries parsing...', {
       filesContentLength: filesContent.length,
-      hasContent: filesContent.length > 0
+      hasContent: filesContent.length > 0,
+      contentPreview: filesContent.substring(0, 500) + (filesContent.length > 500 ? '...' : '')
     });
     
-    // Split by filename patterns - look for lines that are followed by MODIFY or NEW
-    const fileBlocks = filesContent.split(/(?=^[^\n]*\n(?:MODIFY|NEW))/m).filter(block => block.trim());
+    if (!filesContent || filesContent.trim().length === 0) {
+      console.error('❌ No files content provided to parse');
+      return items;
+    }
+
+    // Try multiple parsing strategies to handle different AI response formats
+    let fileBlocks: string[] = [];
+    
+    // Strategy 1: Primary regex split (look for lines followed by MODIFY or NEW)
+    const primarySplit = filesContent.split(/(?=^[^\n]*\n(?:MODIFY|NEW))/m).filter(block => block.trim());
+    
+    // Strategy 2: Alternative split (look for common filename patterns)
+    const alternativeSplit = filesContent.split(/(?=^[^\n]*\.(ts|tsx|js|jsx|py|java|cpp|cs|php|rb|go|rs|swift|kt)\s*$)/m).filter(block => block.trim());
+    
+    // Strategy 3: Simple line-based parsing (fallback)
+    const simpleSplit = this.parseFileEntriesSimple(filesContent);
+    
+    // Choose the best strategy based on results
+    if (primarySplit.length > 1) {
+      fileBlocks = primarySplit;
+      console.log('✅ Using primary regex split strategy');
+    } else if (alternativeSplit.length > 1) {
+      fileBlocks = alternativeSplit;
+      console.log('⚠️ Using alternative filename pattern split strategy');
+    } else if (simpleSplit.length > 0) {
+      console.log('🔄 Using simple line-based fallback parsing');
+      return simpleSplit;
+    } else {
+      console.error('❌ All parsing strategies failed, using raw content');
+      // Last resort: create a single item with all content
+      return [{
+        id: 'fallback_item',
+        type: 'create',
+        title: 'Implementation Files',
+        description: 'Complete implementation details',
+        details: filesContent,
+        dependencies: [],
+        estimatedTime: '8 hours',
+      }];
+    }
     
     console.log('🔍 Split into file blocks:', {
       totalBlocks: fileBlocks.length,
+      strategy: primarySplit.length > 1 ? 'primary' : 'alternative',
       blockPreviews: fileBlocks.slice(0, 3).map(block => block.substring(0, 100))
     });
     
     // Process all file blocks for comprehensive implementation
     fileBlocks.forEach((block, index) => {
       const lines = block.trim().split('\n');
-      if (lines.length < 3) return; // Need at least filename, MODIFY/NEW, and description
       
-      const fileName = lines[0].trim();
-      const actionType = lines[1].trim(); // MODIFY or NEW
-      const descriptionLines = lines.slice(2);
+      console.log(`📄 Processing file block ${index}:`, {
+        totalLines: lines.length,
+        firstLines: lines.slice(0, 3).map(line => line.trim()),
+        blockPreview: block.substring(0, 200)
+      });
+      
+      // More flexible validation - allow blocks with at least 2 lines (filename + action or description)
+      if (lines.length < 2) {
+        console.log(`⏭️ Skipping block ${index}: Too few lines (${lines.length})`);
+        return;
+      }
+      
+      // Extract filename and action type with better error handling
+      let fileName = lines[0].trim();
+      let actionType = '';
+      let descriptionLines: string[] = [];
+      
+      // Check if second line contains MODIFY/NEW or if it's part of description
+      if (lines.length >= 2 && (lines[1].trim().toUpperCase() === 'MODIFY' || lines[1].trim().toUpperCase() === 'NEW')) {
+        actionType = lines[1].trim();
+        descriptionLines = lines.slice(2);
+      } else {
+        // If no explicit MODIFY/NEW, infer from context or default to CREATE
+        actionType = 'NEW';
+        descriptionLines = lines.slice(1);
+        console.log(`🔍 No explicit action type found for ${fileName}, defaulting to NEW`);
+      }
+      
       const description = descriptionLines.join('\n').trim();
       
       console.log(`📄 Processing file block ${index}:`, {
@@ -836,11 +1018,10 @@ The goal is a complete, professional implementation plan that covers every aspec
         lineCount: lines.length
       });
       
-      // Skip entries marked as optional
-      if (fileName.toLowerCase().includes('(optional)') || 
-          actionType.toLowerCase().includes('(optional)') || 
-          description.toLowerCase().includes('(optional)')) {
-        console.log(`⏭️ Skipping optional file: ${fileName}`);
+      // More restrictive optional filtering - only skip if explicitly marked as optional in parentheses
+      if ((fileName.includes('(optional)') || fileName.includes('[optional]')) && 
+          (actionType.includes('(optional)') || actionType.includes('[optional]'))) {
+        console.log(`⏭️ Skipping explicitly optional file: ${fileName}`);
         return;
       }
       
@@ -889,9 +1070,127 @@ The goal is a complete, professional implementation plan that covers every aspec
     
     console.log('🎯 Final parsing results:', {
       totalItemsParsed: items.length,
-      fileTypes: items.map(item => ({ name: item.title, type: item.type }))
+      fileTypes: items.map(item => ({ name: item.title, type: item.type })),
+      totalSuccessfullyParsed: items.length,
+      totalBlocksProcessed: fileBlocks.length
     });
     
+    // If we have very few items compared to what we expected, log a warning
+    if (items.length === 0) {
+      console.error('❌ NO IMPLEMENTATION FILES PARSED! This is the bug the user reported.');
+      console.error('Raw files content:', filesContent);
+    } else if (items.length < 3) {
+      console.warn('⚠️ Suspiciously few implementation files parsed:', items.length);
+    }
+    
+    return items;
+  }
+
+  /**
+   * Simple fallback parsing strategy for when regex-based approaches fail
+   */
+  private parseFileEntriesSimple(filesContent: string): PlanItem[] {
+    const items: PlanItem[] = [];
+    console.log('🔄 Starting simple fallback parsing...');
+    
+    const lines = filesContent.split('\n');
+    let currentFileIndex = 0;
+    let i = 0;
+    
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      
+      // Look for potential filenames (lines containing file extensions)
+      if (line && (line.includes('.ts') || line.includes('.tsx') || line.includes('.js') || 
+                   line.includes('.jsx') || line.includes('.py') || line.includes('.java') ||
+                   line.includes('.cpp') || line.includes('.cs') || line.includes('.php') ||
+                   line.includes('.rb') || line.includes('.go') || line.includes('.rs') ||
+                   line.includes('.swift') || line.includes('.kt') || line.includes('.html') ||
+                   line.includes('.css') || line.includes('.scss') || line.includes('.json') ||
+                   line.includes('.yml') || line.includes('.yaml') || line.includes('.md'))) {
+        
+        const fileName = line;
+        console.log(`🎯 Found potential filename: ${fileName}`);
+        
+        // Look ahead for action type and description
+        let actionType = 'NEW';
+        let descriptionLines: string[] = [];
+        let j = i + 1;
+        
+        // Check next line for action type
+        if (j < lines.length) {
+          const nextLine = lines[j].trim().toUpperCase();
+          if (nextLine === 'MODIFY' || nextLine === 'NEW' || nextLine === 'CREATE') {
+            actionType = nextLine === 'CREATE' ? 'NEW' : nextLine;
+            j++;
+          }
+        }
+        
+        // Collect description lines until we hit another filename or end
+        while (j < lines.length) {
+          const descLine = lines[j].trim();
+          
+          // Stop if we hit another potential filename
+          if (descLine && (descLine.includes('.ts') || descLine.includes('.tsx') || 
+                          descLine.includes('.js') || descLine.includes('.jsx') ||
+                          descLine.includes('.py') || descLine.includes('.java') ||
+                          descLine.includes('.cpp') || descLine.includes('.cs') ||
+                          descLine.includes('.php') || descLine.includes('.rb') ||
+                          descLine.includes('.go') || descLine.includes('.rs') ||
+                          descLine.includes('.html') || descLine.includes('.css') ||
+                          descLine.includes('.json') || descLine.includes('.yml') ||
+                          descLine.includes('.md')) && j > i + 2) {
+            break;
+          }
+          
+          if (descLine) {
+            descriptionLines.push(lines[j]);
+          }
+          j++;
+        }
+        
+        const description = descriptionLines.join('\n').trim();
+        
+        if (description.length > 10) { // Only add if we have a meaningful description
+          const isNew = actionType.toUpperCase() === 'NEW';
+          const itemType = isNew ? 'create' : 'modify';
+          
+          // Infer file path
+          let filePath = fileName;
+          if (!fileName.includes('/') && !fileName.includes('\\')) {
+            if (fileName.endsWith('.tsx') || fileName.endsWith('.jsx')) {
+              filePath = fileName.startsWith('page.') ? `app/${fileName}` : `app/components/${fileName}`;
+            } else if (fileName.endsWith('.ts') && !fileName.endsWith('.d.ts')) {
+              filePath = `app/lib/${fileName}`;
+            } else if (fileName.endsWith('.d.ts')) {
+              filePath = `types/${fileName}`;
+            } else {
+              filePath = `app/${fileName}`;
+            }
+          }
+          
+          items.push({
+            id: `simple_file_${currentFileIndex}`,
+            type: itemType,
+            title: `${isNew ? 'Create' : 'Modify'} ${fileName}`,
+            description: `${actionType}: ${fileName}`,
+            filePath: filePath,
+            details: description,
+            dependencies: currentFileIndex > 0 ? [`simple_file_${currentFileIndex - 1}`] : [],
+            estimatedTime: this.estimateFileTime(description, isNew),
+          });
+          
+          console.log(`✅ Added simple parsed file: ${fileName} (${actionType})`);
+          currentFileIndex++;
+        }
+        
+        i = j - 1; // Continue from where we left off
+      }
+      
+      i++;
+    }
+    
+    console.log(`🎯 Simple parsing completed: ${items.length} files found`);
     return items;
   }
 
