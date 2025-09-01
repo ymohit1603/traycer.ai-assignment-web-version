@@ -97,14 +97,19 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
     if (filesSection) {
       filesSection.items
         .filter(item => {
-          // Filter out optional entries
+          // Only filter out entries that are EXPLICITLY marked as optional in parentheses or brackets
           const fileName = item.filePath?.split('/').pop() || item.filePath || '';
           const actionType = getActionType(item);
           const description = item.details || '';
           
-          return !(fileName.toLowerCase().includes('(optional)') || 
-                  actionType.toLowerCase().includes('(optional)') || 
-                  description.toLowerCase().includes('(optional)'));
+          // More restrictive filtering - only exclude if explicitly marked as optional
+          const isExplicitlyOptional = (
+            fileName.includes('(optional)') || fileName.includes('[optional]') ||
+            actionType.includes('(optional)') || actionType.includes('[optional]') ||
+            description.includes('(optional)') || description.includes('[optional]')
+          );
+          
+          return !isExplicitlyOptional;
         })
         .forEach(item => {
           const fileName = item.filePath?.split('/').pop() || item.filePath || 'Unknown file';
@@ -402,14 +407,23 @@ export default function PlanDisplay({ plan, isLoading, error, onClose, onRegener
             <h2 className="text-xl font-bold text-gray-100 mb-4">Implementation Files</h2>
             {plan.sections.find(s => s.id === 'files')?.items
               .filter(item => {
-                // Filter out optional entries
+                // Only filter out entries that are EXPLICITLY marked as optional in parentheses or brackets
                 const fileName = item.filePath?.split('/').pop() || item.filePath || '';
                 const actionType = getActionType(item);
                 const description = item.details || '';
                 
-                return !(fileName.toLowerCase().includes('(optional)') || 
-                        actionType.toLowerCase().includes('(optional)') || 
-                        description.toLowerCase().includes('(optional)'));
+                // More restrictive filtering - only exclude if explicitly marked as optional
+                const isExplicitlyOptional = (
+                  fileName.includes('(optional)') || fileName.includes('[optional]') ||
+                  actionType.includes('(optional)') || actionType.includes('[optional]') ||
+                  description.includes('(optional)') || description.includes('[optional]')
+                );
+                
+                if (isExplicitlyOptional) {
+                  console.log(`🚫 Filtering out explicitly optional file: ${fileName}`);
+                }
+                
+                return !isExplicitlyOptional;
               })
               .map((item) => (
               <div key={item.id} className="mb-8">
