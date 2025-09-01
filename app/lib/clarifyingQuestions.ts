@@ -332,7 +332,7 @@ Generate clarifying questions to help create a detailed implementation plan for 
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const questions = JSON.parse(jsonMatch[0]);
-        return questions.map((q: any, index: number) => ({
+        return questions.map((q: Partial<ClarifyingQuestion>, index: number) => ({
           ...q,
           id: q.id || `question_${index}`,
         }));

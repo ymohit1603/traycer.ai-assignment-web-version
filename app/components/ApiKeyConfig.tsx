@@ -41,8 +41,8 @@ export default function ApiKeyConfig({ onApiKeySet, isOpen, onClose }: ApiKeyCon
 
     try {
       // Test the API key by making a simple request
-      const testService = new OpenAIService(apiKey);
       // We'll just validate the format for now since testing requires actual API call
+      new OpenAIService(apiKey); // Validate API key format
       
       // Save to localStorage
       localStorage.setItem('traycer_openai_key', apiKey);

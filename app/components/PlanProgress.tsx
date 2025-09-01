@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { PlanHistoryService, PlanProgress, PlanProgressItem, SavedPlan } from "../lib/planHistory";
 
 interface PlanProgressProps {
@@ -16,13 +16,7 @@ export default function PlanProgressTracker({ plan, onClose, isOpen }: PlanProgr
   const [noteText, setNoteText] = useState("");
   const [timeSpent, setTimeSpent] = useState<number>(0);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadProgress();
-    }
-  }, [isOpen, plan.id]);
-
-  const loadProgress = async () => {
+  const loadProgress = useCallback(async () => {
     let existingProgress = PlanHistoryService.getPlanProgress(plan.id);
     
     if (!existingProgress) {
@@ -35,7 +29,13 @@ export default function PlanProgressTracker({ plan, onClose, isOpen }: PlanProgr
     if (plan.sections.length > 0) {
       setSelectedSection(plan.sections[0].id);
     }
-  };
+  }, [plan.id, plan.sections]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadProgress();
+    }
+  }, [isOpen, plan.id, loadProgress]);
 
   const updateItemStatus = async (
     itemId: string,

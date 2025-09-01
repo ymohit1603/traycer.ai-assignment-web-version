@@ -2,8 +2,9 @@
 
 import React, { useState, useRef, useCallback } from "react";
 import { UploadedFile, UploadProgress } from "../page";
-import { CodebaseParser, CodebaseIndex } from "../lib/codebaseParser";
-import { StorageManager } from "../lib/storageManager";
+// Import statements for future use
+// import { CodebaseParser, CodebaseIndex } from "../lib/codebaseParser";
+// import { StorageManager } from "../lib/storageManager";
 
 interface FileUploadProps {
   onFilesUploaded: (files: UploadedFile[]) => void;
@@ -105,7 +106,7 @@ export default function FileUpload({ onFilesUploaded, onProgressUpdate }: FileUp
     setDragActive(false);
 
     const items = Array.from(e.dataTransfer.items);
-    const files: File[] = [];
+    // const files: File[] = []; // Will be used for future file processing
 
     Promise.all(
       items.map(item => {
@@ -153,7 +154,7 @@ export default function FileUpload({ onFilesUploaded, onProgressUpdate }: FileUp
           ref={inputRef}
           type="file"
           multiple
-          {...({ webkitdirectory: "" } as any)}
+          {...({ webkitdirectory: "" } as { webkitdirectory?: string })}
           onChange={handleChange}
           className="hidden"
         />

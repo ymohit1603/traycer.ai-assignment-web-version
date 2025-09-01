@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { PlanHistoryService, SavedPlan, PlanComparison } from "../lib/planHistory";
-import { GeneratedPlan } from "../lib/openAIService";
 
 interface PlanHistoryProps {
   onPlanSelect: (plan: SavedPlan) => void;
@@ -25,16 +24,17 @@ export default function PlanHistory({
   const [selectedPlans, setSelectedPlans] = useState<string[]>([]);
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [statistics, setStatistics] = useState<any>(null);
+  const [statistics, setStatistics] = useState<{
+    totalPlans: number;
+    favoritePlans: number;
+    plansByComplexity: { low: number; medium: number; high: number };
+    completedPlans: number;
+    inProgressPlans: number;
+    averageTimeSpent: number;
+    storageUsed: { used: number; total: number; percentage: number };
+  } | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadPlans();
-      setStatistics(PlanHistoryService.getPlanStatistics());
-    }
-  }, [isOpen, selectedFilter]);
-
-  const loadPlans = () => {
+  const loadPlans = useCallback(() => {
     let loadedPlans: SavedPlan[] = [];
 
     switch (selectedFilter) {
@@ -56,7 +56,14 @@ export default function PlanHistory({
     }
 
     setPlans(loadedPlans);
-  };
+  }, [selectedFilter, searchQuery, currentCodebaseId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadPlans();
+      setStatistics(PlanHistoryService.getPlanStatistics());
+    }
+  }, [isOpen, selectedFilter, loadPlans]);
 
   const handleToggleFavorite = async (planId: string) => {
     const plan = plans.find(p => p.id === planId);
@@ -229,14 +236,14 @@ export default function PlanHistory({
                   className="w-full pl-10 pr-4 py-2 border border-gray-700 bg-gray-900 text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 placeholder-gray-500"
                 />
                 <svg className="absolute left-3 top-2.5 w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
             </div>
 
             <select
               value={selectedFilter}
-              onChange={(e) => setSelectedFilter(e.target.value as any)}
+              onChange={(e) => setSelectedFilter(e.target.value as 'all' | 'favorites' | 'recent' | 'current-codebase')}
               className="px-3 py-2 border border-gray-700 bg-gray-900 text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
             >
               <option value="all">All Plans</option>

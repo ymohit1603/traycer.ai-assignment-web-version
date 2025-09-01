@@ -99,7 +99,7 @@ export default function PromptArea({ value, onChange, placeholder }: PromptAreaP
                 onClick={() => handleExampleClick(example)}
                 className="w-full text-left text-sm text-gray-300 hover:text-blue-400 hover:bg-gray-600 px-3 py-2 rounded transition-colors"
               >
-                "{example}"
+                &ldquo;{example}&rdquo;
               </button>
             ))}
           </div>
