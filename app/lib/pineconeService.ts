@@ -84,10 +84,10 @@ export class PineconeService {
     // Update dimension if provided
     if (dimension) {
       this.dimension = dimension;
-      console.log(`📏 Pinecone dimension set to: ${this.dimension}`);
+      console.log(`Dimension set to: ${this.dimension}`);
     }
     
-    console.log(`🔗 Pinecone index host set to: ${this.indexHost}`);
+    console.log(`Index host set to: ${this.indexHost}`);
   }
 
   /**
@@ -102,7 +102,7 @@ export class PineconeService {
    */
   async initializeIndex(): Promise<void> {
     try {
-      console.log(`🔧 Initializing Pinecone index: ${this.indexName}`);
+      console.log(`Initializing Pinecone index: ${this.indexName}`);
 
       // Check if index exists
       const indexList = await this.pinecone.listIndexes();
@@ -116,34 +116,34 @@ export class PineconeService {
           const indexDimension = indexStats.dimension;
           
           if (indexDimension !== this.dimension) {
-            console.warn(`⚠️ Dimension mismatch: Index has ${indexDimension}, but we need ${this.dimension}`);
+            console.warn(`Dimension mismatch: Index has ${indexDimension}, but we need ${this.dimension}`);
             console.log(`🗑️ Deleting existing index to recreate with correct dimensions...`);
             
             await this.pinecone.deleteIndex(this.indexName);
-            console.log(`✅ Deleted existing index: ${this.indexName}`);
+            console.log(`Deleted existing index: ${this.indexName}`);
             
             // Wait a moment for deletion to complete
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Will create new index below
           } else {
-            console.log(`✅ Index ${this.indexName} already exists with correct dimensions (${indexDimension})`);
+            console.log(`Index ${this.indexName} already exists with correct dimensions (${indexDimension})`);
             return;
           }
         } catch (describeError) {
-          console.warn(`⚠️ Could not describe existing index stats, proceeding to recreate:`, describeError);
+          console.warn(`Could not describe existing index stats, proceeding to recreate:`, describeError);
           
           try {
             await this.pinecone.deleteIndex(this.indexName);
             await new Promise(resolve => setTimeout(resolve, 2000));
           } catch (deleteError) {
-            console.warn(`⚠️ Could not delete existing index:`, deleteError);
+            console.warn(`Could not delete existing index:`, deleteError);
           }
         }
       }
 
       // Create index if it doesn't exist
-      console.log(`📝 Creating new index: ${this.indexName}`);
+      console.log(`Creating new index: ${this.indexName}`);
       await this.pinecone.createIndex({
         name: this.indexName,
         dimension: this.dimension,
@@ -157,12 +157,12 @@ export class PineconeService {
       });
 
       // Wait for index to be ready
-      console.log('⏳ Waiting for index to be ready...');
+      console.log('Waiting for index to be ready...');
       await this.waitForIndexReady();
       
-      console.log(`✅ Index ${this.indexName} created and ready`);
+      console.log(`Index ${this.indexName} created and ready`);
     } catch (error) {
-      console.error('❌ Error initializing Pinecone index:', error);
+      console.error('Error initializing Pinecone index:', error);
       throw error;
     }
   }
@@ -184,7 +184,7 @@ export class PineconeService {
         // Index might not be visible yet
       }
 
-      console.log(`⏳ Waiting for index... (attempt ${attempt}/${maxAttempts})`);
+      console.log(`Waiting for index... (attempt ${attempt}/${maxAttempts})`);
       await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
     }
 
@@ -200,7 +200,7 @@ export class PineconeService {
     codebaseId: string,
     onProgress?: ProgressCallback
   ): Promise<void> {
-    console.log(`🚀 Storing ${chunks.length} chunks in Pinecone...`);
+      console.log(`Storing ${chunks.length} chunks in Pinecone...`);
 
     // Validate embedding dimensions
     if (embeddings.length > 0) {
@@ -211,7 +211,7 @@ export class PineconeService {
           `Please ensure your embedding service and Pinecone index use the same dimensions.`
         );
       }
-      console.log(`✅ Embedding dimensions validated: ${firstEmbedding.length}`);
+      console.log(`Embedding dimensions validated: ${firstEmbedding.length}`);
     }
 
     const index = this.getIndex();
@@ -223,7 +223,7 @@ export class PineconeService {
     for (const chunk of chunks) {
       const embedding = embeddingMap.get(chunk.id);
       if (!embedding) {
-        console.warn(`⚠️ No embedding found for chunk ${chunk.id}, skipping`);
+        console.warn(`No embedding found for chunk ${chunk.id}, skipping`);
         continue;
       }
 
@@ -255,7 +255,7 @@ export class PineconeService {
       vectors.push(vector);
     }
 
-    console.log(`📦 Created ${vectors.length} vectors for storage`);
+    console.log(`Created ${vectors.length} vectors for storage`);
 
     // Store vectors in batches
     const batches = this.createBatches(vectors, this.batchSize);
@@ -266,7 +266,7 @@ export class PineconeService {
       const batch = batches[i];
       
       try {
-        console.log(`📥 Upserting batch ${i + 1}/${batches.length} (${batch.length} vectors)`);
+        console.log(`Upserting batch ${i + 1}/${batches.length} (${batch.length} vectors)`);
         
         onProgress?.({
           processed,
@@ -278,14 +278,14 @@ export class PineconeService {
         await index.upsert(batch);
         processed += batch.length;
         
-        console.log(`✅ Batch ${i + 1} completed`);
+        console.log(`Batch ${i + 1} completed`);
         
         // Small delay between batches to avoid rate limiting
         if (i < batches.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       } catch (error) {
-        console.error(`❌ Error upserting batch ${i + 1}:`, error);
+        console.error(`Error upserting batch ${i + 1}:`, error);
         errors += batch.length;
       }
     }
@@ -296,7 +296,7 @@ export class PineconeService {
       errors
     });
 
-    console.log(`✅ Stored ${processed} vectors (${errors} errors) in Pinecone`);
+    console.log(`Stored ${processed} vectors (${errors} errors) in Pinecone`);
   }
 
   /**
@@ -315,7 +315,7 @@ export class PineconeService {
     } = options;
 
     try {
-      console.log(`🔍 Searching for similar chunks (topK: ${topK})`);
+      console.log(`Searching for similar chunks (topK: ${topK})`);
       
       const index = this.getIndex();
       
@@ -349,11 +349,11 @@ export class PineconeService {
         metadata: (match.metadata || {}) as PineconeChunkMetadata
       })) || [];
 
-      console.log(`✅ Found ${results.length} similar chunks`);
+      console.log(`Found ${results.length} similar chunks`);
       
       return results;
     } catch (error) {
-      console.error('❌ Error searching similar chunks:', error);
+      console.error('Error searching similar chunks:', error);
       throw error;
     }
   }
@@ -366,13 +366,13 @@ export class PineconeService {
     generateEmbedding: (text: string) => Promise<number[]>,
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
-    console.log(`🔤 Searching by text query: "${query.substring(0, 100)}..."`);
+    console.log(`Searching by text query: "${query.substring(0, 100)}..."`);
     
     try {
       const queryEmbedding = await generateEmbedding(query);
       return await this.searchSimilarChunks(queryEmbedding, options);
     } catch (error) {
-      console.error('❌ Error in query search:', error);
+        console.error('Error in query search:', error);
       throw error;
     }
   }
@@ -404,7 +404,7 @@ export class PineconeService {
    */
   async deleteCodebaseChunks(codebaseId: string): Promise<void> {
     try {
-      console.log(`🗑️ Deleting chunks for codebase: ${codebaseId}`);
+      console.log(`Deleting chunks for codebase: ${codebaseId}`);
       
       const index = this.getIndex();
       
@@ -423,12 +423,12 @@ export class PineconeService {
       if (idsToDelete.length > 0) {
         console.log(`Found ${idsToDelete.length} chunks to delete`);
         await index.deleteMany(idsToDelete);
-        console.log(`✅ Deleted ${idsToDelete.length} chunks for codebase: ${codebaseId}`);
+        console.log(`Deleted ${idsToDelete.length} chunks for codebase: ${codebaseId}`);
       } else {
         console.log(`ℹ️ No chunks found for codebase: ${codebaseId}`);
       }
     } catch (error) {
-      console.error('❌ Error deleting codebase chunks:', error);
+      console.error('Error deleting codebase chunks:', error);
       throw error;
     }
   }
@@ -438,15 +438,15 @@ export class PineconeService {
    */
   async deleteChunks(chunkIds: string[]): Promise<void> {
     try {
-      console.log(`🗑️ Deleting ${chunkIds.length} specific chunks`);
+      console.log(`Deleting ${chunkIds.length} specific chunks`);
       
       const index = this.getIndex();
       
       await index.deleteMany(chunkIds);
 
-      console.log(`✅ Deleted ${chunkIds.length} chunks`);
+      console.log(`Deleted ${chunkIds.length} chunks`);
     } catch (error) {
-      console.error('❌ Error deleting chunks:', error);
+      console.error('Error deleting chunks:', error);
       throw error;
     }
   }
@@ -469,7 +469,7 @@ export class PineconeService {
         indexFullness: stats.indexFullness || 0
       };
     } catch (error) {
-      console.error('❌ Error getting index stats:', error);
+      console.error('Error getting index stats:', error);
       throw error;
     }
   }
@@ -489,9 +489,9 @@ export class PineconeService {
         metadata: metadata
       });
 
-      console.log(`✅ Updated metadata for chunk: ${chunkId}`);
+          console.log(`Updated metadata for chunk: ${chunkId}`);
     } catch (error) {
-      console.error(`❌ Error updating chunk metadata:`, error);
+      console.error(`Error updating chunk metadata:`, error);
       throw error;
     }
   }

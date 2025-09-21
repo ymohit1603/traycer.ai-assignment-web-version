@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SimilaritySearchService, SearchContext } from '../../lib/similaritySearch';
 import { ContextAssemblyService, AssemblyOptions } from '../../lib/contextAssembly';
-import { PrunedStoredCodebase } from '../../lib/payloadPruning';
 
 // Initialize services
 let searchService: SimilaritySearchService | null = null;

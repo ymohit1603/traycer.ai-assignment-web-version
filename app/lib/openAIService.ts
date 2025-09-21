@@ -69,17 +69,17 @@ export class OpenAIService {
   private apiKey: string;
 
   constructor(apiKeyOverride?: string) {
-    console.log('🔧 Initializing OpenAI Service...');
+    console.log(' Initializing OpenAI Service...');
     
     // Get API key from environment variable
     this.apiKey = apiKeyOverride || process.env.OPEN_AI_API || process.env.NEXT_PUBLIC_OPEN_AI_API || '';
     
     if (!this.apiKey) {
-      console.error('❌ No API key found in environment variables');
+      console.error(' No API key found in environment variables');
       throw new Error('API key not found. Please set OPEN_AI_API environment variable.');
     }
     
-    console.log('✅ API key found, initializing OpenRouter client...');
+    console.log(' API key found, initializing OpenRouter client...');
     
     this.openai = new OpenAI({
       baseURL: "https://openrouter.ai/api/v1",
@@ -91,7 +91,7 @@ export class OpenAIService {
       dangerouslyAllowBrowser: true, // Note: In production, use a backend service
     });
     
-    console.log('✅ OpenAI Service initialized successfully');
+    console.log(' OpenAI Service initialized successfully');
   }
 
   async generateImplementationPlan(
@@ -101,7 +101,7 @@ export class OpenAIService {
     onProgress?: ProgressCallback,
     useDeepAnalysis: boolean = true
   ): Promise<GeneratedPlan> {
-    console.log('🚀 Starting implementation plan generation...', {
+    console.log(' Starting implementation plan generation...', {
       codebaseFiles: storedCodebase.metadata.totalFiles,
       languages: storedCodebase.metadata.languages,
       promptLength: userPrompt.length,
@@ -110,26 +110,26 @@ export class OpenAIService {
 
     try {
       // Step 1: Prepare context from codebase
-      console.log('📊 Step 1: Preparing context from codebase...');
+      console.log(' Step 1: Preparing context from codebase...');
       onProgress?.({
         step: 'analyzing',
         progress: 10,
-        message: '🧠 Entering deep analysis mode...',
+        message: ' Entering deep analysis mode...',
       });
       
       const context = await this.prepareContext(storedCodebase, userPrompt, onProgress, useDeepAnalysis);
-      console.log('✅ Context prepared:', {
+      console.log(' Context prepared:', {
         relevantFiles: context.relevantFiles.length,
         dependencies: context.dependencies.length,
         keyComponents: context.keyComponents.length
       });
       
       // Step 2: Generate the plan using OpenAI
-      console.log('🤖 Step 2: Calling OpenAI API...');
+      console.log(' Step 2: Calling OpenAI API...');
       onProgress?.({
         step: 'generating',
         progress: 60,
-        message: '🤖 Connecting to AI model...',
+        message: ' Connecting to AI model...',
       });
       
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -137,7 +137,7 @@ export class OpenAIService {
       onProgress?.({
         step: 'generating',
         progress: 65,
-        message: '💭 AI is analyzing your requirements...',
+        message: ' AI is analyzing your requirements...',
       });
       
       await new Promise(resolve => setTimeout(resolve, 400));
@@ -145,7 +145,7 @@ export class OpenAIService {
       onProgress?.({
         step: 'generating',
         progress: 70,
-        message: '🔍 AI is studying codebase patterns...',
+        message: ' AI is studying codebase patterns...',
       });
       
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -153,7 +153,7 @@ export class OpenAIService {
       onProgress?.({
         step: 'generating',
         progress: 75,
-        message: '🎯 AI is crafting focused implementation strategy...',
+        message: ' AI is crafting focused implementation strategy...',
       });
       
       const planContent = await this.callOpenAI(context, maxTokens, onProgress);
@@ -161,7 +161,7 @@ export class OpenAIService {
       onProgress?.({
         step: 'generating',
         progress: 80,
-        message: '🧠 AI is formulating Cursor AI-ready plan...',
+        message: ' AI is formulating Cursor AI-ready plan...',
       });
       
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -169,22 +169,22 @@ export class OpenAIService {
       onProgress?.({
         step: 'generating',
         progress: 85,
-        message: '📝 AI is organizing implementation steps...',
+        message: ' AI is organizing implementation steps...',
       });
-      console.log('✅ OpenAI API response received:', {
+      console.log('OpenAI API response received:', {
         responseLength: planContent.length
       });
       
       // Step 3: Parse and structure the response
-      console.log('🔄 Step 3: Parsing and structuring response...');
+      console.log(' Step 3: Parsing and structuring response...');
       onProgress?.({
         step: 'finalizing',
         progress: 90,
-        message: '📋 Structuring plan sections...',
+        message: ' Structuring plan sections...',
       });
       
       const structuredPlan = await this.parsePlanResponse(planContent, context);
-      console.log('✅ Plan structured successfully:', {
+        console.log(' Plan structured successfully:', {
         planId: structuredPlan.id,
         sections: structuredPlan.sections.length,
         estimatedHours: structuredPlan.metadata.estimatedTimeHours
@@ -193,12 +193,12 @@ export class OpenAIService {
       onProgress?.({
         step: 'complete',
         progress: 100,
-        message: '✅ Plan generation complete!',
+        message: ' Plan generation complete!',
       });
       
       return structuredPlan;
     } catch (error) {
-      console.error('❌ Error generating implementation plan:', error);
+      console.error(' Error generating implementation plan:', error);
       throw new Error(`Failed to generate plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -210,7 +210,7 @@ export class OpenAIService {
     onProgress?.({
       step: 'analyzing',
       progress: 20,
-      message: '📊 Reading project metadata...',
+      message: ' Reading project metadata...',
     });
     
     const languages = storedCodebase.metadata.languages;
@@ -219,11 +219,11 @@ export class OpenAIService {
     const functionNames = searchEngine.getFunctionNames();
     const classNames = searchEngine.getClassNames();
     
-    // Find relevant files based on user prompt
+    
     onProgress?.({
       step: 'analyzing',
       progress: 30,
-      message: '🔍 Searching for relevant files...',
+      message: ' Searching for relevant files...',
     });
     
     const searchResults = searchEngine.search(userPrompt, {
@@ -235,11 +235,10 @@ export class OpenAIService {
     const relevantFilesWithContent: Array<{path: string, content: string, relevance: number}> = [];
     
     if (useDeepAnalysis) {
-      // DEEP ANALYSIS: Actually read file contents (Cursor AI-like)
       onProgress?.({
         step: 'analyzing',
         progress: 32,
-        message: '🧠 Entering deep analysis mode...',
+        message: ' Entering deep analysis mode...',
       });
       
       for (let i = 0; i < Math.min(searchResults.length, 5); i++) { // Analyze up to 5 most relevant files
@@ -247,7 +246,6 @@ export class OpenAIService {
         const file = searchEngine.getFileById(result.fileId);
         
         if (file && file.content) {
-          // Simulate tool call: read file
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
@@ -259,10 +257,8 @@ export class OpenAIService {
             }
           });
           
-          // Allow UI to render the tool call
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          // Simulate code understanding
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
@@ -276,7 +272,6 @@ export class OpenAIService {
           
           await new Promise(resolve => setTimeout(resolve, 400));
           
-          // Simulate dependency analysis
           onProgress?.({
             step: 'analyzing',
             currentFile: file.filePath,
@@ -339,7 +334,7 @@ export class OpenAIService {
     onProgress?.({
       step: 'analyzing',
       progress: 50,
-      message: '🏗️ Building project structure overview...',
+      message: 'Building project structure overview...',
     });
     
     const projectStructure = this.generateProjectStructure(storedCodebase);
@@ -348,7 +343,7 @@ export class OpenAIService {
     onProgress?.({
       step: 'analyzing',
       progress: 52,
-      message: '🔍 Identifying key components and patterns...',
+      message: ' Identifying key components and patterns...',
     });
     
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -364,7 +359,7 @@ export class OpenAIService {
     onProgress?.({
       step: 'analyzing',
       progress: 55,
-      message: '📝 Generating codebase summary...',
+      message: ' Generating codebase summary...',
     });
     
     const codebaseOverview = this.generateCodebaseOverview(
@@ -390,7 +385,7 @@ export class OpenAIService {
     const systemPrompt = this.buildSystemPrompt();
     const userPrompt = this.buildUserPrompt(context);
 
-    console.log('📡 Making OpenAI API call with streaming...', {
+    console.log(' Making OpenAI API call with streaming...', {
       model: "openai/gpt-oss-20b:free",
       systemPromptLength: systemPrompt.length,
       userPromptLength: userPrompt.length,
@@ -438,7 +433,7 @@ export class OpenAIService {
         }
       }
 
-      console.log('✅ Streaming response completed:', {
+      console.log(' Streaming response completed:', {
         responseLength: fullResponse.length,
         chunksProcessed: chunkCount,
         firstWords: fullResponse.substring(0, 100) + '...'
@@ -451,9 +446,8 @@ export class OpenAIService {
       return fullResponse;
 
     } catch (error) {
-      console.error('❌ OpenAI streaming failed, falling back to non-streaming:', error);
+      console.error('OpenAI streaming failed, falling back to non-streaming:', error);
 
-      // Fallback to non-streaming if streaming fails
       const completion = await this.openai.chat.completions.create({
         model: "openai/gpt-oss-20b:free",
         messages: [
@@ -461,10 +455,10 @@ export class OpenAIService {
           { role: "user", content: userPrompt },
         ],
         max_tokens: maxTokens,
-        temperature: 0.3, // Lower temperature for more focused output
-        top_p: 0.95, // Better quality
-        presence_penalty: 0.1, // Encourage comprehensive coverage
-        frequency_penalty: 0.1, // Reduce repetition
+        temperature: 0.3, 
+        top_p: 0.95, 
+        presence_penalty: 0.1, 
+        frequency_penalty: 0.1, 
       });
 
       const response = completion.choices[0]?.message?.content;
@@ -480,7 +474,7 @@ export class OpenAIService {
     // Extract meaningful progress information from the AI's response
     if (content.includes('**Observations**') && !content.includes('**Approach**')) {
       return { 
-        message: '🤔 AI is analyzing codebase observations...',
+        message: ' AI is analyzing codebase observations...',
         toolCall: {
           name: 'analyze_codebase',
           args: { action: 'observations' }
@@ -490,7 +484,7 @@ export class OpenAIService {
 
     if (content.includes('**Approach**') && !content.includes('**Implementation Files**')) {
       return { 
-        message: '🎯 AI is developing implementation approach...',
+        message: ' AI is developing implementation approach...',
         toolCall: {
           name: 'plan_approach',
           args: { action: 'strategy' }
@@ -520,7 +514,7 @@ export class OpenAIService {
       }
 
       return { 
-        message: '📋 AI is organizing implementation files...',
+        message: ' AI is organizing implementation files...',
         toolCall: {
           name: 'organize_files',
           args: { action: 'structure' }
@@ -529,7 +523,7 @@ export class OpenAIService {
     }
 
     return { 
-      message: '🤖 AI is generating implementation plan...',
+      message: ' AI is generating implementation plan...',
       toolCall: {
         name: 'generate_plan',
         args: { type: 'comprehensive' }
@@ -685,7 +679,7 @@ The goal is a complete, professional implementation plan that covers every aspec
       const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       
       // Extract sections using multiple regex patterns for robustness
-      console.log('🔍 Starting section extraction from response...', {
+        console.log(' Starting section extraction from response...', {
         responseLength: response.length,
         hasObservations: response.includes('**Observations**') || response.includes('Observations'),
         hasApproach: response.includes('**Approach**') || response.includes('Approach'),
@@ -721,7 +715,7 @@ The goal is a complete, professional implementation plan that covers every aspec
       const filesContent = filesMatch ? filesMatch[1].trim() : '';
       
       // Parse individual files from the Implementation Files section
-      console.log('🔍 Parsing Implementation Files section...', {
+      console.log(' Parsing Implementation Files section...', {
         hasFilesMatch: !!filesMatch,
         filesContentLength: filesContent.length,
         filesContentPreview: filesContent.substring(0, 300),
@@ -734,26 +728,26 @@ The goal is a complete, professional implementation plan that covers every aspec
 
       // If we still don't have files content, try to extract from the whole response
       if (!filesContent || filesContent.length < 50) {
-        console.warn('⚠️ Primary file extraction failed, trying alternative methods...');
+        console.warn(' Primary file extraction failed, trying alternative methods...');
         
         // Look for any content that contains file names and descriptions
         const alternativeMatch = response.match(/(.*\.(ts|tsx|js|jsx|py|java|cpp|cs|php|rb|go|rs|html|css|json|yml|md)[\s\S]*)/i);
         if (alternativeMatch) {
           const alternativeContent = alternativeMatch[0];
-          console.log('🔄 Found alternative file content:', {
+          console.log(' Found alternative file content:', {
             length: alternativeContent.length,
             preview: alternativeContent.substring(0, 200)
           });
           
           // Use the alternative content if it's more substantial
           if (alternativeContent.length > filesContent.length) {
-            console.log('✅ Using alternative file content extraction');
+            console.log(' Using alternative file content extraction');
             // Update filesContent to use the alternative
             const updatedFilesContent = alternativeContent;
             const fileEntries = this.parseFileEntries(updatedFilesContent);
             
             if (fileEntries.length > 0) {
-              console.log('🎯 Alternative extraction successful:', fileEntries.length, 'files');
+              console.log(' Alternative extraction successful:', fileEntries.length, 'files');
               // Continue with the successfully extracted files
               const title = this.generatePlanTitle(context.userPrompt);
               
@@ -820,7 +814,7 @@ The goal is a complete, professional implementation plan that covers every aspec
       
       const fileEntries = this.parseFileEntries(filesContent);
       
-      console.log('📁 Parsed file entries:', {
+      console.log(' Parsed file entries:', {
         totalFiles: fileEntries.length,
         fileNames: fileEntries.map(f => f.title).slice(0, 10)
       });
@@ -924,14 +918,14 @@ The goal is a complete, professional implementation plan that covers every aspec
   private parseFileEntries(filesContent: string): PlanItem[] {
     const items: PlanItem[] = [];
     
-    console.log('📝 Starting file entries parsing...', {
+    console.log('Starting file entries parsing...', {
       filesContentLength: filesContent.length,
       hasContent: filesContent.length > 0,
       contentPreview: filesContent.substring(0, 500) + (filesContent.length > 500 ? '...' : '')
     });
     
     if (!filesContent || filesContent.trim().length === 0) {
-      console.error('❌ No files content provided to parse');
+      console.error(' No files content provided to parse');
       return items;
     }
 
@@ -950,15 +944,15 @@ The goal is a complete, professional implementation plan that covers every aspec
     // Choose the best strategy based on results
     if (primarySplit.length > 1) {
       fileBlocks = primarySplit;
-      console.log('✅ Using primary regex split strategy');
+      console.log(' Using primary regex split strategy');
     } else if (alternativeSplit.length > 1) {
       fileBlocks = alternativeSplit;
-      console.log('⚠️ Using alternative filename pattern split strategy');
+      console.log(' Using alternative filename pattern split strategy');
     } else if (simpleSplit.length > 0) {
-      console.log('🔄 Using simple line-based fallback parsing');
+      console.log(' Using simple line-based fallback parsing');
       return simpleSplit;
     } else {
-      console.error('❌ All parsing strategies failed, using raw content');
+      console.error(' All parsing strategies failed, using raw content');
       // Last resort: create a single item with all content
       return [{
         id: 'fallback_item',
@@ -971,7 +965,7 @@ The goal is a complete, professional implementation plan that covers every aspec
       }];
     }
     
-    console.log('🔍 Split into file blocks:', {
+    console.log(' Split into file blocks:', {
       totalBlocks: fileBlocks.length,
       strategy: primarySplit.length > 1 ? 'primary' : 'alternative',
       blockPreviews: fileBlocks.slice(0, 3).map(block => block.substring(0, 100))
@@ -981,7 +975,7 @@ The goal is a complete, professional implementation plan that covers every aspec
     fileBlocks.forEach((block, index) => {
       const lines = block.trim().split('\n');
       
-      console.log(`📄 Processing file block ${index}:`, {
+      console.log(` Processing file block ${index}:`, {
         totalLines: lines.length,
         firstLines: lines.slice(0, 3).map(line => line.trim()),
         blockPreview: block.substring(0, 200)
@@ -989,7 +983,7 @@ The goal is a complete, professional implementation plan that covers every aspec
       
       // More flexible validation - allow blocks with at least 2 lines (filename + action or description)
       if (lines.length < 2) {
-        console.log(`⏭️ Skipping block ${index}: Too few lines (${lines.length})`);
+        console.log(` Skipping block ${index}: Too few lines (${lines.length})`);
         return;
       }
       
@@ -1006,12 +1000,12 @@ The goal is a complete, professional implementation plan that covers every aspec
         // If no explicit MODIFY/NEW, infer from context or default to CREATE
         actionType = 'NEW';
         descriptionLines = lines.slice(1);
-        console.log(`🔍 No explicit action type found for ${fileName}, defaulting to NEW`);
+        console.log(` No explicit action type found for ${fileName}, defaulting to NEW`);
       }
       
       const description = descriptionLines.join('\n').trim();
       
-      console.log(`📄 Processing file block ${index}:`, {
+      console.log(` Processing file block ${index}:`, {
         fileName,
         actionType,
         descriptionLength: description.length,
@@ -1021,7 +1015,7 @@ The goal is a complete, professional implementation plan that covers every aspec
       // More restrictive optional filtering - only skip if explicitly marked as optional in parentheses
       if ((fileName.includes('(optional)') || fileName.includes('[optional]')) && 
           (actionType.includes('(optional)') || actionType.includes('[optional]'))) {
-        console.log(`⏭️ Skipping explicitly optional file: ${fileName}`);
+        console.log(` Skipping explicitly optional file: ${fileName}`);
         return;
       }
       
@@ -1065,10 +1059,10 @@ The goal is a complete, professional implementation plan that covers every aspec
         estimatedTime: this.estimateFileTime(description, isNew),
       });
       
-      console.log(`✅ Added file entry: ${fileName} (${actionType})`);
+      console.log(` Added file entry: ${fileName} (${actionType})`);
     });
     
-    console.log('🎯 Final parsing results:', {
+    console.log(' Final parsing results:', {
       totalItemsParsed: items.length,
       fileTypes: items.map(item => ({ name: item.title, type: item.type })),
       totalSuccessfullyParsed: items.length,
@@ -1077,10 +1071,10 @@ The goal is a complete, professional implementation plan that covers every aspec
     
     // If we have very few items compared to what we expected, log a warning
     if (items.length === 0) {
-      console.error('❌ NO IMPLEMENTATION FILES PARSED! This is the bug the user reported.');
+      console.error(' NO IMPLEMENTATION FILES PARSED! This is the bug the user reported.');
       console.error('Raw files content:', filesContent);
     } else if (items.length < 3) {
-      console.warn('⚠️ Suspiciously few implementation files parsed:', items.length);
+      console.warn(' Suspiciously few implementation files parsed:', items.length);
     }
     
     return items;
@@ -1091,7 +1085,7 @@ The goal is a complete, professional implementation plan that covers every aspec
    */
   private parseFileEntriesSimple(filesContent: string): PlanItem[] {
     const items: PlanItem[] = [];
-    console.log('🔄 Starting simple fallback parsing...');
+    console.log(' Starting simple fallback parsing...');
     
     const lines = filesContent.split('\n');
     let currentFileIndex = 0;
@@ -1110,7 +1104,7 @@ The goal is a complete, professional implementation plan that covers every aspec
                    line.includes('.yml') || line.includes('.yaml') || line.includes('.md'))) {
         
         const fileName = line;
-        console.log(`🎯 Found potential filename: ${fileName}`);
+        console.log(` Found potential filename: ${fileName}`);
         
         // Look ahead for action type and description
         let actionType = 'NEW';
@@ -1180,7 +1174,7 @@ The goal is a complete, professional implementation plan that covers every aspec
             estimatedTime: this.estimateFileTime(description, isNew),
           });
           
-          console.log(`✅ Added simple parsed file: ${fileName} (${actionType})`);
+          console.log(` Added simple parsed file: ${fileName} (${actionType})`);
           currentFileIndex++;
         }
         
@@ -1190,7 +1184,7 @@ The goal is a complete, professional implementation plan that covers every aspec
       i++;
     }
     
-    console.log(`🎯 Simple parsing completed: ${items.length} files found`);
+      console.log(` Simple parsing completed: ${items.length} files found`);
     return items;
   }
 
@@ -1395,7 +1389,7 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
     maxTokens: number = 100000,
     onProgress?: ProgressCallback
   ): Promise<GeneratedPlan> {
-    console.log('🚀 Starting new project plan generation...', {
+    console.log(' Starting new project plan generation...', {
       projectType: requirements.projectType,
       techStack: requirements.techStack,
       promptLength: projectPrompt.length,
@@ -1404,7 +1398,7 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
 
     try {
       // Create context for new project
-      console.log('📊 Preparing new project context...');
+      console.log(' Preparing new project context...');
       onProgress?.({
         step: 'analyzing',
         progress: 20,
@@ -1412,10 +1406,10 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
       });
       
       const context = this.prepareNewProjectContext(projectPrompt, requirements);
-      console.log('✅ New project context prepared');
+      console.log(' New project context prepared');
       
       // Generate the plan using OpenAI
-      console.log('🤖 Calling OpenAI API for new project...');
+      console.log(' Calling OpenAI API for new project...');
       onProgress?.({
         step: 'generating',
         progress: 60,
@@ -1423,12 +1417,12 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
       });
       
       const planContent = await this.callOpenAIForNewProject(context, maxTokens);
-      console.log('✅ OpenAI API response received:', {
+      console.log(' OpenAI API response received:', {
         responseLength: planContent.length
       });
       
       // Parse and structure the response
-      console.log('🔄 Parsing and structuring new project plan...');
+      console.log(' Parsing and structuring new project plan...');
       onProgress?.({
         step: 'finalizing',
         progress: 90,
@@ -1436,7 +1430,7 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
       });
       
       const structuredPlan = await this.parseNewProjectPlanResponse(planContent, context);
-      console.log('✅ New project plan structured successfully:', {
+      console.log(' New project plan structured successfully:', {
         planId: structuredPlan.id,
         sections: structuredPlan.sections.length,
         estimatedHours: structuredPlan.metadata.estimatedTimeHours
@@ -1450,7 +1444,7 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
       
       return structuredPlan;
     } catch {
-      console.error('❌ Error generating new project plan');
+        console.error(' Error generating new project plan');
       throw new Error('Failed to generate new project plan: Unknown error');
     }
   }
@@ -1574,7 +1568,7 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
     const systemPrompt = this.buildNewProjectSystemPrompt();
     const userPrompt = this.buildNewProjectUserPrompt(context);
 
-    console.log('📡 Making OpenAI API call for new project...', {
+    console.log(' Making OpenAI API call for new project...', {
       model: "openai/gpt-oss-20b:free",
       systemPromptLength: systemPrompt.length,
       userPromptLength: userPrompt.length,
@@ -1589,10 +1583,10 @@ The codebase appears to be a ${this.inferProjectType(languages, storedCodebase.f
         { role: "user", content: userPrompt },
       ],
       max_tokens: maxTokens,
-      temperature: 0.3, // More focused, detailed responses
-      top_p: 0.95, // Better quality
-      presence_penalty: 0.1, // Encourage comprehensive coverage
-      frequency_penalty: 0.1, // Reduce repetition
+      temperature: 0.3, 
+      top_p: 0.95, 
+      presence_penalty: 0.1, 
+      frequency_penalty: 0.1, 
     });
 
     const response = completion.choices[0]?.message?.content;

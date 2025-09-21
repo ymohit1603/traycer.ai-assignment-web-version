@@ -72,7 +72,7 @@ export class GitHubService {
     per_page: number = 30
   ): Promise<GitHubRepository[]> {
     try {
-      console.log(`📚 Fetching user repositories (${type}, ${sort})...`);
+      console.log(`Fetching user repositories (${type}, ${sort})...`);
       
       const response = await this.octokit.repos.listForAuthenticatedUser({
         type,
@@ -99,10 +99,10 @@ export class GitHubService {
         }
       }));
 
-      console.log(`✅ Fetched ${repositories.length} repositories`);
+      console.log(`Fetched ${repositories.length} repositories`);
       return repositories;
     } catch (error) {
-      console.error('❌ Error fetching repositories:', error);
+      console.error('Error fetching repositories:', error);
       throw new Error(`Failed to fetch repositories: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -117,7 +117,7 @@ export class GitHubService {
     ref?: string
   ): Promise<GitHubFile[]> {
     try {
-      console.log(`📁 Fetching repository contents: ${owner}/${repo}${path ? `/${path}` : ''}`);
+      console.log(`Fetching repository contents: ${owner}/${repo}${path ? `/${path}` : ''}`);
       
       const response = await this.octokit.repos.getContent({
         owner,
@@ -153,7 +153,7 @@ export class GitHubService {
 
       return files;
     } catch (error) {
-      console.error(`❌ Error fetching repository contents:`, error);
+      console.error(`Error fetching repository contents:`, error);
       throw new Error(`Failed to fetch repository contents: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -186,7 +186,7 @@ export class GitHubService {
         
         // Skip very large files (>1MB)
         if (decodedContent.length > 1024 * 1024) {
-          console.log(`⏭️ Skipping large file: ${path} (${decodedContent.length} bytes)`);
+          console.log(`Skipping large file: ${path} (${decodedContent.length} bytes)`);
           return null;
         }
 
@@ -203,7 +203,7 @@ export class GitHubService {
 
       return null;
     } catch (error) {
-      console.warn(`⚠️ Failed to fetch file content for ${path}:`, error);
+      console.warn(`Failed to fetch file content for ${path}:`, error);
       return null;
     }
   }
@@ -237,7 +237,7 @@ export class GitHubService {
         date: commit.commit.author?.date || new Date().toISOString()
       };
     } catch (error) {
-      console.error('❌ Error fetching latest commit:', error);
+      console.error('Error fetching latest commit:', error);
       throw new Error(`Failed to fetch latest commit: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -259,7 +259,7 @@ export class GitHubService {
     const syncId = `sync_${owner}_${repo}_${Date.now()}`;
     
     try {
-      console.log(`🔄 Starting repository sync: ${owner}/${repo}${branch ? ` (${branch})` : ''}`);
+      console.log(`Starting repository sync: ${owner}/${repo}${branch ? ` (${branch})` : ''}`);
       
       onProgress?.({
         phase: 'fetching',
@@ -317,7 +317,7 @@ export class GitHubService {
         errors: []
       });
 
-      console.log(`✅ Repository sync complete: ${syncId}`);
+      console.log(`Repository sync complete: ${syncId}`);
       
       return {
         merkleTree,
@@ -327,7 +327,7 @@ export class GitHubService {
       };
 
     } catch (error) {
-      console.error(`❌ Repository sync failed: ${syncId}`, error);
+      console.error(`Repository sync failed: ${syncId}`, error);
       
       onProgress?.({
         phase: 'error',
@@ -361,7 +361,7 @@ export class GitHubService {
     latestCommit: string;
   }> {
     try {
-      console.log(`🔍 Checking for changes since ${lastSyncCommit.substring(0, 8)}...`);
+      console.log(`Checking for changes since ${lastSyncCommit.substring(0, 8)}...`);
       
       const response = await this.octokit.repos.listCommits({
         owner,
@@ -383,7 +383,7 @@ export class GitHubService {
       const hasChanges = newCommits.length > 0;
       const latestCommit = response.data.length > 0 ? response.data[0].sha : lastSyncCommit;
 
-      console.log(`📊 Change check result: ${hasChanges ? `${newCommits.length} new commits` : 'no changes'}`);
+      console.log(`Change check result: ${hasChanges ? `${newCommits.length} new commits` : 'no changes'}`);
 
       return {
         hasChanges,
@@ -391,7 +391,7 @@ export class GitHubService {
         latestCommit
       };
     } catch (error) {
-      console.error('❌ Error checking for changes:', error);
+      console.error('Error checking for changes:', error);
       throw new Error(`Failed to check for changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -412,7 +412,7 @@ export class GitHubService {
     commit: string;
   }> {
     try {
-      console.log(`🔄 Starting incremental sync for ${owner}/${repo}...`);
+      console.log(`Starting incremental sync for ${owner}/${repo}...`);
       
       onProgress?.({
         phase: 'fetching',
@@ -432,7 +432,7 @@ export class GitHubService {
       );
 
       if (!changeCheck.hasChanges) {
-        console.log('✅ No changes detected, skipping sync');
+        console.log('No changes detected, skipping sync');
         return {
           newMerkleTree: oldMerkleTree,
           changes: {
@@ -494,7 +494,7 @@ export class GitHubService {
         errors: []
       });
 
-      console.log(`✅ Incremental sync complete: ${changes.totalChanges} changes detected`);
+      console.log(` Incremental sync complete: ${changes.totalChanges} changes detected`);
 
       return {
         newMerkleTree,
@@ -504,7 +504,7 @@ export class GitHubService {
       };
 
     } catch (error) {
-      console.error('❌ Incremental sync failed:', error);
+      console.error('Incremental sync failed:', error);
       throw error;
     }
   }
@@ -518,14 +518,14 @@ export class GitHubService {
     webhookUrl: string
   ): Promise<{ webhookId: number; secret: string }> {
     try {
-      console.log(`🔗 Setting up webhook for ${owner}/${repo}...`);
+      console.log(`Setting up webhook for ${owner}/${repo}...`);
       
       const secret = this.generateWebhookSecret();
       
       const response = await this.octokit.repos.createWebhook({
         owner,
         repo,
-        name: 'web',
+        name: 'web',  
         config: {
           url: webhookUrl,
           content_type: 'json',
@@ -536,14 +536,14 @@ export class GitHubService {
         active: true
       });
 
-      console.log(`✅ Webhook created with ID: ${response.data.id}`);
+      console.log(`Webhook created with ID: ${response.data.id}`);
       
       return {
         webhookId: response.data.id,
         secret
       };
     } catch (error) {
-      console.error('❌ Error setting up webhook:', error);
+      console.error('Error setting up webhook:', error);
       throw new Error(`Failed to setup webhook: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -559,9 +559,9 @@ export class GitHubService {
         hook_id: webhookId
       });
       
-      console.log(`✅ Webhook ${webhookId} removed`);
+      console.log(`Webhook ${webhookId} removed`);
     } catch (error) {
-      console.error('❌ Error removing webhook:', error);
+      console.error('Error removing webhook:', error);
       throw new Error(`Failed to remove webhook: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

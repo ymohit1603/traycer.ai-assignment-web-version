@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import PromptArea from "./components/PromptArea";
 import UploadProgress from "./components/UploadProgress";
-// import FileUpload from "./components/FileUpload";
-// import FileTree from "./components/FileTree";
 import StreamingProgressTicker from "./components/StreamingProgressTicker";
 import PlanDisplay from "./components/PlanDisplay";
 import { StorageManager, StoredCodebase } from "./lib/storageManager";
@@ -38,44 +36,36 @@ export interface UploadProgress {
   isUploading: boolean;
 }
 
-// Helper function to index uploaded files into a codebase
+//index uploaded files into a codebase
 async function indexCodebaseFiles(uploadedFiles: UploadedFile[]): Promise<StoredCodebase> {
-  console.log(`🔍 Starting codebase indexing for ${uploadedFiles.length} files...`);
+
   const parsedFiles: CodebaseIndex[] = [];
   
   // Parse each file with content
   for (const file of uploadedFiles) {
     if (file.content && file.content.trim()) {
-      console.log(`📝 Parsing file: ${file.path} (${file.content.length} characters)`);
       try {
         const parsedFile = CodebaseParser.parseFile(file.path, file.content);
         parsedFiles.push(parsedFile);
-        console.log(`✅ Parsed ${file.path}: ${parsedFile.functions.length} functions, ${parsedFile.classes.length} classes`);
       } catch (error) {
-        console.error(`❌ Error parsing file ${file.path}:`, error);
       }
     } else {
-      console.log(`⏭️ Skipping file with no content: ${file.path}`);
     }
   }
   
-  console.log(`📊 Parsed ${parsedFiles.length} files successfully`);
   
   // Store the parsed codebase
   const codebaseName = `Codebase_${Date.now()}`;
-  console.log(`💾 Storing codebase as: ${codebaseName}`);
   
   const codebaseId = await StorageManager.storeCodebase(codebaseName, parsedFiles, true);
-  console.log(`✅ Codebase stored with ID: ${codebaseId}`);
   
   // Retrieve and return the stored codebase
   const storedCodebase = await StorageManager.getCodebase(codebaseId);
   if (!storedCodebase) {
-    console.error('❌ Failed to retrieve stored codebase');
     throw new Error('Failed to store and retrieve codebase');
   }
   
-  console.log(`🎉 Codebase indexing completed:`, {
+  console.log(`Codebase indexing completed:`, {
     totalFiles: storedCodebase.metadata.totalFiles,
     languages: storedCodebase.metadata.languages,
     totalSize: storedCodebase.metadata.totalSize
@@ -235,8 +225,7 @@ export default function Home() {
 
 
 
-  const handleDirectFolderUpload = () => {
-    console.log('🔄 Initiating direct folder upload...');
+  const handleDirectFolderUpload = () => {  
     toast.loading('Opening folder selector...');
     
     try {
@@ -246,37 +235,32 @@ export default function Home() {
       input.multiple = true;
       
       input.onchange = (e) => {
-        console.log('📂 Folder selection completed');
         toast.dismiss(); // Dismiss loading toast
         
         const files = (e.target as HTMLInputElement).files;
         if (files && files.length > 0) {
-          console.log(`📁 Selected ${files.length} files from folder`);
           const fileArray = Array.from(files);
           processUploadedFiles(fileArray);
         } else {
-          console.warn('⚠️ No files selected');
           toast.error('No files selected');
         }
       };
       
       input.oncancel = () => {
-        console.log('❌ Folder selection cancelled');
         toast.dismiss();
         toast.error('Folder selection cancelled');
       };
       
       input.click();
-      console.log('🖱️ Folder selector opened');
     } catch (error) {
-      console.error('❌ Error opening folder selector:', error);
+      console.error('Error opening folder selector:', error);
       toast.dismiss();
       toast.error('Failed to open folder selector');
     }
   };
 
   const processUploadedFiles = async (files: File[]) => {
-    console.log(`🔄 Starting to process ${files.length} files...`);
+    console.log(`Starting to process ${files.length} files...`);
     
     try {
       // Filter out unwanted files
@@ -284,14 +268,14 @@ export default function Home() {
         const path = file.webkitRelativePath || file.name;
         const isExcluded = isExcludedFile(path);
         if (isExcluded) {
-          console.log(`🚫 Excluded file: ${path}`);
+          console.log(`Excluded file: ${path}`);
         }
         return !isExcluded;
       });
 
       const excludedCount = files.length - filteredFiles.length;
       if (excludedCount > 0) {
-        console.log(`🗂️ Filtered out ${excludedCount} unwanted files`);
+        console.log(`Filtered out ${excludedCount} unwanted files`);
         toast.success(`Filtered out ${excludedCount} unwanted files`);
       }
 
@@ -299,7 +283,7 @@ export default function Home() {
       let processedFiles = 0;
       const uploadedFiles: UploadedFile[] = [];
 
-      console.log(`📁 Processing ${totalFiles} valid files...`);
+      console.log(`Processing ${totalFiles} valid files...`);
       toast.loading(`Processing ${totalFiles} files...`);
 
       setUploadProgress({
@@ -312,7 +296,7 @@ export default function Home() {
       // Process files
       for (const file of filteredFiles) {
         const relativePath = file.webkitRelativePath || file.name;
-        console.log(`📄 Processing file: ${relativePath} (${file.size} bytes)`);
+        console.log(`Processing file: ${relativePath} (${file.size} bytes)`);
         
         setUploadProgress({
           total: totalFiles,
@@ -327,13 +311,13 @@ export default function Home() {
           const isSizeValid = file.size < 1024 * 1024; // 1MB limit
           
           if (isText && isSizeValid) {
-            console.log(`📖 Reading content of text file: ${file.name}`);
+            console.log(`Reading content of text file: ${file.name}`);
             content = await readFileContent(file);
-            console.log(`✅ Successfully read ${content.length} characters from ${file.name}`);
+            console.log(`Successfully read ${content.length} characters from ${file.name}`);
           } else if (!isText) {
-            console.log(`🚫 Skipping non-text file: ${file.name}`);
+            console.log(`Skipping non-text file: ${file.name}`);
           } else if (!isSizeValid) {
-            console.log(`⚠️ Skipping large file (${file.size} bytes): ${file.name}`);
+            console.log(`Skipping large file (${file.size} bytes): ${file.name}`);
           }
 
           const uploadedFile: UploadedFile = {
@@ -345,9 +329,9 @@ export default function Home() {
           };
 
           uploadedFiles.push(uploadedFile);
-          console.log(`✅ Successfully processed: ${relativePath}`);
+          console.log(`Successfully processed: ${relativePath}`);
         } catch (error) {
-          console.error(`❌ Error processing file ${file.name}:`, error);
+          console.error(`Error processing file ${file.name}:`, error);
           toast.error(`Failed to process: ${file.name}`);
         }
 
@@ -365,12 +349,12 @@ export default function Home() {
       setUploadedFiles(uploadedFiles);
       
       const textFilesCount = uploadedFiles.filter(f => f.content).length;
-      console.log(`🎉 Upload completed! ${uploadedFiles.length} files processed, ${textFilesCount} with content`);
-      toast.dismiss();
+      console.log(`Upload completed! ${uploadedFiles.length} files processed, ${textFilesCount} with content`);
+      toast.dismiss();  
       toast.success(`Successfully uploaded ${uploadedFiles.length} files (${textFilesCount} text files)`);
       
     } catch (error) {
-      console.error('❌ Error during file processing:', error);
+      console.error('Error during file processing:', error);
       toast.dismiss();
       toast.error('Failed to process uploaded files');
       
@@ -384,26 +368,26 @@ export default function Home() {
   };
 
     const handleSubmit = async () => {
-    console.log('🚀 Starting plan generation process...');
+    console.log('Starting plan generation process...');
     
     if (!prompt.trim()) {
-      console.warn('⚠️ Empty prompt provided');
+      console.warn('Empty prompt provided');
       toast.error("Please enter a prompt");
       return;
     }
     
     // Check if indexing is in progress
     if (isIndexing) {
-      console.log('⏱️ Indexing in progress, queuing prompt...');
+      console.log('Indexing in progress, queuing prompt...');
       setQueuedPrompt(prompt);
       toast.success('Prompt queued! It will be processed when indexing completes.');
       return;
     }
 
-    console.log(`📝 Prompt: "${prompt}"`);
+    console.log(`Prompt: "${prompt}"`);
 
     // Planning mode: Check for available codebase sources
-    console.log('🔍 Planning mode: Checking for available codebase sources...');
+    console.log('Planning mode: Checking for available codebase sources...');
     
     // First, check if we already have a stored codebase (from GitHub sync or previous upload)
     let targetCodebase = storedCodebase;
@@ -412,29 +396,29 @@ export default function Home() {
     // If no stored codebase, try to find GitHub synced codebase
     if (!targetCodebase && importedFromGitHub && importedRepository) {
       const githubCodebaseId = `github_${importedRepository.owner.login}_${importedRepository.name}`;
-      console.log(`🔍 Checking for GitHub synced codebase: ${githubCodebaseId}`);
+      console.log(`Checking for GitHub synced codebase: ${githubCodebaseId}`);
       
       try {
         targetCodebase = await StorageManager.getCodebase(githubCodebaseId);
         if (targetCodebase) {
-          console.log(`✅ Found GitHub synced codebase: ${targetCodebase.metadata.totalFiles} files, ${targetCodebase.metadata.languages.join(', ')}`);
+          console.log(`Found GitHub synced codebase: ${targetCodebase.metadata.totalFiles} files, ${targetCodebase.metadata.languages.join(', ')}`);
           setStoredCodebase(targetCodebase);
           codebaseSource = 'github-sync';
         }
       } catch (error) {
-        console.warn('⚠️ Could not retrieve GitHub synced codebase:', error);
+        console.warn('Could not retrieve GitHub synced codebase:', error);
       }
     }
     
     // If still no codebase, check if we have uploaded files to index
     if (!targetCodebase && uploadedFiles.length > 0) {
-      console.log(`🔍 No stored codebase found, will index ${uploadedFiles.length} uploaded files`);
+      console.log(`No stored codebase found, will index ${uploadedFiles.length} uploaded files`);
       codebaseSource = 'manual-upload';
     }
     
     // If no files are uploaded and no stored codebase, start from scratch automatically
     if (!targetCodebase && !uploadedFiles.length && !isIndexed) {
-      console.log('🆕 No codebase available, starting from scratch...');
+      console.log('No codebase available, starting from scratch...');
       await handleStartFromScratch();
       return;
     }
@@ -448,7 +432,7 @@ export default function Home() {
       return;
     }
 
-    console.log(`📁 Codebase source: ${codebaseSource}, Files: ${targetCodebase?.metadata.totalFiles || uploadedFiles.length}`);
+    console.log(`Codebase source: ${codebaseSource}, Files: ${targetCodebase?.metadata.totalFiles || uploadedFiles.length}`);
 
     // Start plan generation process
     setIsGeneratingPlan(true);
@@ -464,7 +448,7 @@ export default function Home() {
     try {
       // If we already have a codebase, skip indexing
       if (targetCodebase) {
-        console.log(`🚀 Using existing codebase from ${codebaseSource}:`, {
+        console.log(`Using existing codebase from ${codebaseSource}:`, {
           id: targetCodebase.metadata.id,
           files: targetCodebase.metadata.totalFiles,
           languages: targetCodebase.metadata.languages
@@ -479,7 +463,7 @@ export default function Home() {
       }
       
       // Only index if we don't have a stored codebase
-      console.log('🔍 Starting codebase indexing for uploaded files...');
+      console.log('Starting codebase indexing for uploaded files...');
       setIsIndexing(true);
       setIsIndexed(false);
       setShowIndexingProgress(true);
@@ -490,7 +474,7 @@ export default function Home() {
       
       // Index the uploaded files
       const indexedCodebase = await indexCodebaseFiles(uploadedFiles);
-      console.log(`✅ Codebase indexed successfully: ${indexedCodebase.metadata.totalFiles} files, ${indexedCodebase.metadata.languages.join(', ')}`);
+      console.log(`Codebase indexed successfully: ${indexedCodebase.metadata.totalFiles} files, ${indexedCodebase.metadata.languages.join(', ')}`);
       setStoredCodebase(indexedCodebase);
       setIsIndexing(false);
       setIsIndexed(true);
@@ -498,7 +482,7 @@ export default function Home() {
       
       // Process queued prompt if any
       if (queuedPrompt) {
-        console.log('📋 Processing queued prompt after indexing completion...');
+        console.log('Processing queued prompt after indexing completion...');
         const savedPrompt = queuedPrompt;
         setQueuedPrompt(null);
         setPrompt(savedPrompt);
@@ -510,11 +494,11 @@ export default function Home() {
       toast.dismiss(loadingToast);
       toast.loading('Generating implementation plan...');
       
-      console.log('🤖 Starting plan generation...');
+      console.log('Starting plan generation...');
       // Then generate the plan
       await generatePlanFromPrompt(prompt, indexedCodebase);
     } catch (error) {
-      console.error('❌ Error during codebase indexing or plan generation:', error);
+      console.error('Error during codebase indexing or plan generation:', error);
 
       // Provide more specific error messages
       let errorMessage = 'Failed to process codebase and generate plan';
@@ -543,14 +527,14 @@ export default function Home() {
   
   // IndexingProgress component callbacks
   const handleIndexingComplete = () => {
-    console.log('✅ Indexing completed via progress tracker');
+    console.log('Indexing completed via progress tracker');
     setIsIndexing(false);
     setIsIndexed(true);
     setShowIndexingProgress(false);
     
     // Process queued prompt if any
     if (queuedPrompt && storedCodebase) {
-      console.log('📋 Processing queued prompt after indexing completion...');
+      console.log('Processing queued prompt after indexing completion...');
       const savedPrompt = queuedPrompt;
       setQueuedPrompt(null);
       setPrompt(savedPrompt);
@@ -560,7 +544,7 @@ export default function Home() {
   };
   
   const handleIndexingError = (error: string) => {
-    console.error('❌ Indexing failed via progress tracker:', error);
+    console.error('Indexing failed via progress tracker:', error);
     setIsIndexing(false);
     setShowIndexingProgress(false);
     toast.error(`Indexing failed: ${error}`);
@@ -574,7 +558,7 @@ export default function Home() {
   };
 
   const generatePlanFromPrompt = async (promptText: string, codebase?: StoredCodebase) => {
-    console.log('🤖 Generating plan from prompt...', { promptText, codebaseFiles: codebase?.metadata.totalFiles });
+    console.log('Generating plan from prompt...', { promptText, codebaseFiles: codebase?.metadata.totalFiles });
     
     setIsGeneratingPlan(true);
     setPlanError(null);
@@ -582,10 +566,10 @@ export default function Home() {
     setPlanProgress(null);
 
     try {
-      console.log('🔧 Initializing OpenAI service...');
+      console.log('Initializing OpenAI service...');
       const openAIService = new OpenAIService();
       
-      console.log('📊 Sending request to OpenAI API...');
+      console.log('Sending request to OpenAI API...');
       const plan = await openAIService.generateImplementationPlan(
         codebase!,
         promptText,
@@ -594,7 +578,7 @@ export default function Home() {
         useDeepAnalysis // analysis mode
       );
       
-      console.log('✅ Plan generated successfully:', {
+      console.log('Plan generated successfully:', {
         planId: plan.id,
         title: plan.title,
         sectionsCount: plan.sections.length,
@@ -615,16 +599,16 @@ export default function Home() {
           promptText
         );
         setSelectedSavedPlan(saved);
-        console.log('✅ Plan saved to history');
+        console.log('Plan saved to history');
       } catch (error) {
-        console.warn('⚠️ Failed to save plan to history:', error);
+        console.warn('Failed to save plan to history:', error);
       }
       
       toast.dismiss(); // Dismiss any loading toasts
       toast.success(`Plan generated successfully! ${plan.sections.length} sections created`);
       
     } catch (error) {
-      console.error('❌ Error generating plan:', error);
+      console.error('Error generating plan:', error);
 
       // Enhanced error handling with specific messages
       let errorMessage = 'Failed to generate plan';
@@ -650,7 +634,7 @@ export default function Home() {
     } finally {
       setIsGeneratingPlan(false);
       setPlanProgress(null);
-      console.log('🏁 Plan generation process completed');
+      console.log('Plan generation process completed');
     }
   };
 
@@ -667,7 +651,7 @@ export default function Home() {
   };
 
   const handleStartFromScratch = async () => {
-    console.log('🆕 Starting from scratch with clarifying questions...');
+    console.log('Starting from scratch with clarifying questions...');
     setIsGeneratingPlan(true);
     setPlanError(null);
     setGeneratedPlan(null);
@@ -676,7 +660,7 @@ export default function Home() {
     const loadingToast = toast.loading('Generating plan based on your requirements...');
 
     try {
-      console.log('🤖 Starting new project plan generation from scratch...');
+      console.log('Starting new project plan generation from scratch...');
       const openAIService = new OpenAIService();
       
       // Use the user's prompt to generate a plan and ask clarifying questions through AI
@@ -704,7 +688,7 @@ Generate a complete project plan including:
         (progress) => setPlanProgress(progress) // progress callback
       );
       
-      console.log('✅ New project plan generated successfully:', {
+      console.log('New project plan generated successfully:', {
         planId: plan.id,
         title: plan.title,
         sectionsCount: plan.sections.length,
@@ -724,28 +708,28 @@ Generate a complete project plan including:
           undefined, // No codebase for new projects
           prompt
         );
-        console.log('✅ New project plan saved to history');
+        console.log('New project plan saved to history');
       } catch (error) {
-        console.warn('⚠️ Failed to save new project plan to history:', error);
+        console.warn('Failed to save new project plan to history:', error);
       }
       
       toast.dismiss();
       toast.success(`Project plan generated! ${plan.sections.length} sections created`);
       
     } catch (error) {
-      console.error('❌ Error generating new project plan:', error);
+      console.error('Error generating new project plan:', error);
       toast.dismiss();
       toast.error(error instanceof Error ? error.message : 'Failed to generate project plan');
       setPlanError(error instanceof Error ? error.message : 'Failed to generate project plan');
     } finally {
       setIsGeneratingPlan(false);
       setPlanProgress(null);
-      console.log('🏁 New project plan generation completed');
+      console.log('New project plan generation completed');
     }
   };
 
   const handleNewProjectPlan = async (requirements: NewProjectRequirements) => {
-    console.log('🆕 Generating plan for new project...', requirements);
+    console.log('Generating plan for new project...', requirements);
     setShowNewProjectPlanning(false);
     setIsGeneratingPlan(true);
     setPlanError(null);
@@ -754,7 +738,7 @@ Generate a complete project plan including:
     const loadingToast = toast.loading('Generating project plan...');
 
     try {
-      console.log('🤖 Starting new project plan generation...');
+      console.log('Starting new project plan generation...');
       const openAIService = new OpenAIService();
       
       // Create a prompt based on the requirements
@@ -778,7 +762,7 @@ User Request: ${prompt}`;
         (progress) => setPlanProgress(progress) // progress callback
       );
       
-      console.log('✅ New project plan generated successfully:', {
+      console.log('New project plan generated successfully:', {
         planId: plan.id,
         title: plan.title,
         sectionsCount: plan.sections.length,
@@ -798,31 +782,31 @@ User Request: ${prompt}`;
           undefined, // No codebase for new projects
           projectPrompt
         );
-        console.log('✅ New project plan with requirements saved to history');
+        console.log('New project plan with requirements saved to history');
       } catch (error) {
-        console.warn('⚠️ Failed to save new project plan to history:', error);
+        console.warn('Failed to save new project plan to history:', error);
       }
       
       toast.dismiss();
       toast.success(`Project plan generated! ${plan.sections.length} sections created`);
       
     } catch (error) {
-      console.error('❌ Error generating new project plan:', error);
+      console.error('Error generating new project plan:', error);
       toast.dismiss();
       toast.error(error instanceof Error ? error.message : 'Failed to generate project plan');
       setPlanError(error instanceof Error ? error.message : 'Failed to generate project plan');
     } finally {
       setIsGeneratingPlan(false);
       setPlanProgress(null);
-      console.log('🏁 New project plan generation completed');
+      console.log('New project plan generation completed');
     }
   };
 
   const handleRefinePlan = async (followUpPrompt: string) => {
-    console.log('🔄 Refining plan with follow-up prompt...', followUpPrompt);
+    console.log('Refining plan with follow-up prompt...', followUpPrompt);
     
     if (!generatedPlan) {
-      console.warn('⚠️ No existing plan to refine');
+      console.warn('No existing plan to refine');
       toast.error('No plan to refine');
       return;
     }
@@ -833,7 +817,7 @@ User Request: ${prompt}`;
     const loadingToast = toast.loading('Refining plan based on your feedback...');
 
     try {
-      console.log('🤖 Starting plan refinement...');
+      console.log('Starting plan refinement...');
       const openAIService = new OpenAIService();
       
       // Add the new prompt to conversation history
@@ -861,7 +845,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
         return;
       }
       
-      console.log('✅ Plan refined successfully:', {
+      console.log('Plan refined successfully:', {
         planId: refinedPlan.id,
         title: refinedPlan.title,
         sectionsCount: refinedPlan.sections.length,
@@ -881,29 +865,29 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
           contextualPrompt
         );
         setSelectedSavedPlan(saved);
-        console.log('✅ Refined plan saved to history');
+        console.log('Refined plan saved to history');
       } catch (error) {
-        console.warn('⚠️ Failed to save refined plan to history:', error);
+        console.warn('Failed to save refined plan to history:', error);
       }
       
       toast.dismiss();
       toast.success('Plan refined successfully!');
       
     } catch (error) {
-      console.error('❌ Error refining plan:', error);
+      console.error('Error refining plan:', error);
       toast.dismiss();
       toast.error(error instanceof Error ? error.message : 'Failed to refine plan');
       setPlanError(error instanceof Error ? error.message : 'Failed to refine plan');
     } finally {
       setIsRefiningPlan(false);
       setPlanProgress(null);
-      console.log('🏁 Plan refinement completed');
+      console.log('Plan refinement completed');
     }
   };
 
   // Plan History Event Handlers
   const handlePlanSelect = (selectedPlan: SavedPlan) => {
-    console.log('📋 Loading plan from history:', selectedPlan.name);
+    console.log('Loading plan from history:', selectedPlan.name);
     setGeneratedPlan(selectedPlan);
     setSelectedSavedPlan(selectedPlan);
     setShowPlanHistory(false);
@@ -911,7 +895,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
   };
 
   const handlePlanCompare = (comparison: PlanComparison) => {
-    console.log('🔄 Comparing plans:', comparison.planA.name, 'vs', comparison.planB.name);
+    console.log('Comparing plans:', comparison.planA.name, 'vs', comparison.planB.name);
     // For now, just show the first plan. In a more complete implementation,
     // you might want to show a comparison view
     setGeneratedPlan(comparison.planA);
@@ -921,7 +905,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
 
   // Semantic Search Event Handlers
   const handleSemanticSearchResults = (results: SemanticSearchResult) => {
-    console.log('🧠 Semantic search results received:', results);
+    console.log('Semantic search results received:', results);
     setSemanticSearchResults(results);
     toast.success(`Found ${results.searchResults.chunks.length} relevant code segments`);
   };
@@ -942,14 +926,14 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
       setSemanticSearchResults(null);
     }
     
-    console.log(`🔄 Switched to ${newMode} mode`);
+    console.log(`Switched to ${newMode} mode`);
     toast.success(`Switched to ${newMode === 'plan' ? 'Plan Generation' : 'Semantic Search'} mode`);
   };
 
   // GitHub Event Handlers
   const handleRepositoryImported = async (repository: GitHubRepository, syncProgress: SyncProgress) => {
-    console.log('📁 Repository imported from GitHub:', repository.fullName);
-    console.log('📊 Sync progress result:', syncProgress.result);
+    console.log('Repository imported from GitHub:', repository.fullName);
+    console.log('Sync progress result:', syncProgress.result);
     
     setImportedFromGitHub(true);
     setImportedRepository(repository);
@@ -962,7 +946,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
     try {
       githubCodebase = await StorageManager.getCodebase(codebaseId);
       if (githubCodebase) {
-        console.log('✅ GitHub codebase successfully stored and retrieved:', {
+        console.log('GitHub codebase successfully stored and retrieved:', {
           id: githubCodebase.metadata.id,
           filesCount: githubCodebase.files?.length || 0,
           totalFiles: githubCodebase.metadata.totalFiles,
@@ -977,12 +961,12 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
         return;
       }
     } catch (error) {
-      console.warn('⚠️ Could not retrieve GitHub stored codebase:', error);
+      console.warn('Could not retrieve GitHub stored codebase:', error);
     }
     
     // If we couldn't get the stored codebase, create a synthetic one
     if (!githubCodebase) {
-      console.log('📝 Creating synthetic codebase (files may not be available for privacy-first search)');
+      console.log('Creating synthetic codebase (files may not be available for privacy-first search)');
       githubCodebase = {
         metadata: {
           id: codebaseId,
@@ -1006,7 +990,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
       };
     }
 
-    console.log('📦 Setting storedCodebase:', {
+    console.log('Setting storedCodebase:', {
       id: githubCodebase.metadata.id,
       filesCount: githubCodebase.files?.length || 0,
       hasFiles: githubCodebase.files && githubCodebase.files.length > 0
@@ -1016,17 +1000,17 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
     // Set indexed state based on whether indexing was successful
     if (syncProgress.result) {
       setIsIndexed(true);
-      toast.success(`🎉 Repository ${repository.name} imported and indexed successfully! ${syncProgress.result.filesCount} files processed.`);
+      toast.success(`Repository ${repository.name} imported and indexed successfully! ${syncProgress.result.filesCount} files processed.`);
     } else {
       setIsIndexed(false);
-      toast.success(`🎉 Repository ${repository.name} imported successfully! Indexing in progress...`);
+      toast.success(`Repository ${repository.name} imported successfully! Indexing in progress...`);
     }
   };
   
   // Ensure state synchronization when GitHub import completes
   useEffect(() => {
     if (importedRepository && importedFromGitHub && !storedCodebase) {
-      console.log('🔄 Synchronizing GitHub import state...');
+      console.log('Synchronizing GitHub import state...');
       const githubCodebase: StoredCodebase = {
         metadata: {
           id: `github_${importedRepository.owner.login}_${importedRepository.name}`,
@@ -1049,7 +1033,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
         }
       };
       
-      console.log('🔄 Setting storedCodebase from useEffect:', githubCodebase.metadata);
+      console.log('Setting storedCodebase from useEffect:', githubCodebase.metadata);
       setStoredCodebase(githubCodebase);
       setIsIndexed(true);
     }
@@ -1057,7 +1041,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
   
   // Debug effect to log state changes
   useEffect(() => {
-    console.log('📊 State Update:', {
+    console.log('State Update:', {
       storedCodebase: storedCodebase?.metadata,
       importedFromGitHub,
       importedRepository: importedRepository?.fullName,
@@ -1235,7 +1219,7 @@ ${newHistory.slice(0, -1).map((msg, i) => `${i % 2 === 0 ? 'User' : 'Assistant'}
                 ) : (
                   <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
                     <p className="text-yellow-300 text-center">
-                      📚 Please upload files or import a repository first to enable semantic search.
+                      Please upload files or import a repository first to enable semantic search.
                     </p>
                   </div>
                 )}

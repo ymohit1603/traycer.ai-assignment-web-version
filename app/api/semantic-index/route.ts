@@ -26,11 +26,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, codebaseId } = body;
 
-    console.log(`🔧 Semantic indexing API: ${action} for codebase ${codebaseId}`);
+    console.log(` Semantic indexing API: ${action} for codebase ${codebaseId}`);
 
     switch (action) {
       case 'initialize': {
-        console.log('🚀 Initializing search service...');
+        console.log(' Initializing search service...');
         
         await searchService.initialize();
         
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        console.log(`📊 Starting indexing for codebase: ${codebaseId}`);
+        console.log(` Starting indexing for codebase: ${codebaseId}`);
 
         // Get codebase from storage
         const storedCodebase = await StorageManager.getCodebase(codebaseId);
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
           codebaseId,
           (progress) => {
             indexingProgress.set(progressId, progress);
-            console.log(`📊 Progress: ${progress.phase} - ${progress.progress}% - ${progress.message}`);
+            console.log(` Progress: ${progress.phase} - ${progress.progress}% - ${progress.message}`);
           }
         );
 
@@ -96,14 +96,14 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        console.log(`🔄 Reindexing codebase: ${codebaseId}`);
+        console.log(` Reindexing codebase: ${codebaseId}`);
 
         // First, delete existing vectors
         try {
           await searchService.deleteCodebaseChunks(codebaseId);
-          console.log(`🗑️ Deleted existing vectors for codebase: ${codebaseId}`);
+          console.log(` Deleted existing vectors for codebase: ${codebaseId}`);
         } catch (error) {
-          console.warn(`⚠️ Error deleting existing vectors: ${error}`);
+          console.warn(`Error deleting existing vectors: ${error}`);
         }
 
         // Then proceed with normal indexing
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        console.log(`🗑️ Deleting index for codebase: ${codebaseId}`);
+        console.log(` Deleting index for codebase: ${codebaseId}`);
 
         await searchService.deleteCodebaseChunks(codebaseId);
 
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('❌ Semantic indexing API error:', error);
+    console.error(' Semantic indexing API error:', error);
     
     return NextResponse.json(
       { 
@@ -255,7 +255,7 @@ export async function GET(request: NextRequest) {
           });
 
         } catch (error) {
-          console.error(`❌ Error checking status for ${codebaseId}:`, error);
+          console.error(` Error checking status for ${codebaseId}:`, error);
           
           return NextResponse.json({
             success: true,
@@ -300,7 +300,7 @@ export async function GET(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('❌ Semantic indexing GET error:', error);
+    console.error(' Semantic indexing GET error:', error);
     
     return NextResponse.json(
       { 
@@ -320,7 +320,7 @@ export async function DELETE(request: NextRequest) {
     const progressId = searchParams.get('progressId');
 
     if (codebaseId) {
-      console.log(`🗑️ DELETE: Removing index for codebase: ${codebaseId}`);
+      console.log(` DELETE: Removing index for codebase: ${codebaseId}`);
       
       const searchService = initializeSearchService();
       await searchService.deleteCodebaseChunks(codebaseId);
@@ -332,7 +332,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (progressId) {
-      console.log(`🗑️ DELETE: Removing progress tracking: ${progressId}`);
+      console.log(` DELETE: Removing progress tracking: ${progressId}`);
       
       const existed = indexingProgress.delete(progressId);
       
@@ -348,7 +348,7 @@ export async function DELETE(request: NextRequest) {
     );
 
   } catch (error) {
-    console.error('❌ Semantic indexing DELETE error:', error);
+    console.error('Semantic indexing DELETE error:', error);
     
     return NextResponse.json(
       { 

@@ -1,8 +1,7 @@
 import { EnhancedSearchResult, ContextualSearchResult } from './similaritySearch';
-import { CodeChunk } from './semanticChunking';
 import { CodebaseIndex } from './codebaseParser';
 import { StoredCodebase, StorageManager } from './storageManager';
-import { PrunedStoredCodebase, PrunedCodebaseFile } from './payloadPruning';
+import { PrunedStoredCodebase } from './payloadPruning';
 
 export interface AssembledContext {
   contextId: string;
@@ -104,8 +103,8 @@ export class ContextAssemblyService {
   ): Promise<AssembledContext> {
     const startTime = Date.now();
     
-    console.log(`🔧 Assembling context for query: "${searchResults.query}"`);
-    console.log(`📊 Processing ${searchResults.chunks.length} search results`);
+    console.log(`Assembling context for query: "${searchResults.query}"`);
+    console.log(`Processing ${searchResults.chunks.length} search results`);
 
     const {
       maxFiles = 10,
@@ -126,13 +125,13 @@ export class ContextAssemblyService {
         .filter(result => result.score >= relevanceThreshold)
         .slice(0, maxSnippets);
 
-      console.log(`📋 Processing ${relevantResults.length} relevant results`);
+      console.log(`       Processing ${relevantResults.length} relevant results`);
 
       // Group by file for efficient processing
       const fileGroups = this.groupResultsByFile(relevantResults);
       const filesToProcess = Array.from(fileGroups.keys()).slice(0, maxFiles);
 
-      console.log(`📁 Processing ${filesToProcess.length} files`);
+      console.log(`       Processing ${filesToProcess.length} files`);
 
       // Process each file and assemble context
       const fileContexts: FileContext[] = [];
@@ -180,7 +179,7 @@ export class ContextAssemblyService {
           });
 
         } catch (error) {
-          console.error(`❌ Error processing file ${filePath}:`, error);
+          console.error(`Error processing file ${filePath}:`, error);
           
           onFileRead?.({
             filePath,
@@ -210,8 +209,8 @@ export class ContextAssemblyService {
       const assemblyTime = Date.now() - startTime;
       const totalLines = fileContexts.reduce((sum, fc) => sum + fc.lineCount, 0);
 
-      console.log(`✅ Context assembly complete in ${assemblyTime}ms`);
-      console.log(`📊 Assembled: ${fileContexts.length} files, ${codeSnippets.length} snippets, ${totalLines} total lines`);
+      console.log(`Context assembly complete in ${assemblyTime}ms`);
+      console.log(` Assembled: ${fileContexts.length} files, ${codeSnippets.length} snippets, ${totalLines} total lines`);
 
       return {
         contextId: this.generateContextId(searchResults.query, codebaseId),
@@ -225,7 +224,7 @@ export class ContextAssemblyService {
       };
 
     } catch (error) {
-      console.error('❌ Error assembling context:', error);
+      console.error('Error assembling context:', error);
       throw error;
     }
   }
@@ -248,8 +247,8 @@ export class ContextAssemblyService {
     const file = this.findFileInCodebase(codebase, filePath);
 
     if (!file || !file.content) {
-      console.warn(`⚠️ File not found or has no content: ${filePath}`);
-      console.log(`🔄 Attempting fallback using chunk content for ${searchResults.length} search results`);
+      console.warn(`File not found or has no content: ${filePath}`);
+      console.log(` Attempting fallback using chunk content for ${searchResults.length} search results`);
       // FALLBACK: Use chunk content from search results instead of discarding
       return this.createFileContextFromChunks(filePath, searchResults, options);
     }
@@ -447,7 +446,7 @@ export class ContextAssemblyService {
       includeDependencies: boolean;
     }
   ): FileContext {
-    console.log(`🔄 Creating fallback context from ${searchResults.length} chunks for: ${filePath}`);
+    console.log(`Creating fallback context from ${searchResults.length} chunks for: ${filePath}`);
     
     const fileName = filePath.split('/').pop() || filePath;
     const language = searchResults[0]?.chunk?.metadata?.language || 'unknown';
@@ -492,7 +491,7 @@ export class ContextAssemblyService {
     const imports = [...new Set(searchResults.flatMap(r => r.chunk?.metadata?.imports || []))];
     const exports = [...new Set(searchResults.flatMap(r => r.chunk?.metadata?.exports || []))];
     
-    console.log(`✅ Created fallback context with ${relevantSections.length} sections, ${totalLines} lines`);
+      console.log(`Created fallback context with ${relevantSections.length} sections, ${totalLines} lines`);
     
     return {
       filePath,
@@ -659,12 +658,12 @@ export class ContextAssemblyService {
   ): Promise<StoredCodebase> {
     // Prefer client-provided codebase for privacy-first approach
     if (clientCodebase) {
-      console.log(`🔒 Using client-provided codebase (privacy-first mode): ${clientCodebase.metadata.id}`);
+      console.log(`Using client-provided codebase (privacy-first mode): ${clientCodebase.metadata.id}`);
       return this.convertPrunedToStoredCodebase(clientCodebase);
     }
 
     // Fall back to server-side lookup
-    console.log(`🗄️ Attempting server-side codebase lookup: ${codebaseId}`);
+    console.log(`Attempting server-side codebase lookup: ${codebaseId}`);
     return this.getCodebase(codebaseId);
   }
 
@@ -753,7 +752,7 @@ export class ContextAssemblyService {
       // List available codebases for debugging
       try {
         const allCodebases = await StorageManager.getAllCodebaseMetadata();
-        console.log(`📋 Available codebases in storage:`, allCodebases.map(cb => cb.id));
+            console.log(`Available codebases in storage:`, allCodebases.map(cb => cb.id));
       } catch (e) {
         console.warn(`Failed to list codebases:`, e);
       }

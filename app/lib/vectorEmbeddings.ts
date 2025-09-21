@@ -57,9 +57,9 @@ export class VectorEmbeddingService {
     this.apiKey = key;
     
     // Log optimized rate limiting info
-    console.log('🚀 Voyage AI Optimized: Using token-aware batching (3 RPM, 10K TPM)');
-    console.log(`📊 Target: ~${this.maxTokensPerRequest} tokens per request, ${this.requestDelay/1000}s intervals`);
-    console.log(`📏 Model: ${this.model} (${this.getExpectedDimension()} dimensions)`);
+    console.log('Voyage AI Optimized: Using token-aware batching (3 RPM, 10K TPM)');
+    console.log(`Target: ~${this.maxTokensPerRequest} tokens per request, ${this.requestDelay/1000}s intervals`);
+    console.log(`Model: ${this.model} (${this.getExpectedDimension()} dimensions)`);
   }
 
   /**
@@ -143,15 +143,15 @@ export class VectorEmbeddingService {
     const embeddings: EmbeddingResult[] = [];
     let totalTokens = 0;
 
-    console.log(`🔢 Generating embeddings for ${chunks.length} chunks...`);
+    console.log(`Generating embeddings for ${chunks.length} chunks...`);
 
     // Prioritize chunks by importance (main files first)
     const prioritizedChunks = VectorEmbeddingService.prioritizeChunks(chunks);
-    console.log(`📋 Prioritized chunks: processing important files first`);
+    console.log(`Prioritized chunks: processing important files first`);
 
     // Create optimal batches based on token limits
     const optimalBatches = this.createOptimalBatches(prioritizedChunks);
-    console.log(`📊 Created ${optimalBatches.length} optimal batches (avg ${Math.round(chunks.length / optimalBatches.length)} chunks per batch)`);
+    console.log(`Created ${optimalBatches.length} optimal batches (avg ${Math.round(chunks.length / optimalBatches.length)} chunks per batch)`);
     
     for (let i = 0; i < optimalBatches.length; i++) {
       const batch = optimalBatches[i];
@@ -161,12 +161,12 @@ export class VectorEmbeddingService {
       const batchText = batch.map(chunk => this.prepareTextForEmbedding(chunk)).join(' ');
       const estimatedTokens = this.estimateTokenCount(batchText);
       
-      console.log(`📦 Processing batch ${batchNum}/${optimalBatches.length} (${batch.length} chunks, ~${estimatedTokens} tokens)`);
+      console.log(`Processing batch ${batchNum}/${optimalBatches.length} (${batch.length} chunks, ~${estimatedTokens} tokens)`);
       
       // Check rate limits
       const rateLimitCheck = this.checkRateLimit(estimatedTokens);
       if (!rateLimitCheck.canProceed) {
-        console.log(`⏱️ Rate limit reached, waiting ${Math.ceil(rateLimitCheck.waitTime/1000)}s for reset...`);
+        console.log(`Rate limit reached, waiting ${Math.ceil(rateLimitCheck.waitTime/1000)}s for reset...`);
         await new Promise(resolve => setTimeout(resolve, rateLimitCheck.waitTime + 1000)); // +1s buffer
       }
       
@@ -178,34 +178,34 @@ export class VectorEmbeddingService {
         // Update rate limit counters
         this.updateRateLimitCounters(estimatedTokens);
         
-        console.log(`✅ Generated ${batchResults.embeddings.length} embeddings in batch ${batchNum}`);
+        console.log(`Generated ${batchResults.embeddings.length} embeddings in batch ${batchNum}`);
         
         // Log progress with time estimation
         const progress = Math.round((embeddings.length / chunks.length) * 100);
         const timePerChunk = (Date.now() - startTime) / embeddings.length;
         const estimatedTimeRemaining = timePerChunk * (chunks.length - embeddings.length);
-        console.log(`📊 Progress: ${progress}% (${embeddings.length}/${chunks.length} chunks) - ETA: ${Math.ceil(estimatedTimeRemaining/1000/60)}min`);
+        console.log(`Progress: ${progress}% (${embeddings.length}/${chunks.length} chunks) - ETA: ${Math.ceil(estimatedTimeRemaining/1000/60)}min`);
         
         // Add delay for next request (unless it's the last batch)
         if (i < optimalBatches.length - 1) {
-          console.log(`⏱️ Rate limiting: waiting ${this.requestDelay/1000}s before next batch...`);
+          console.log(`Rate limiting: waiting ${this.requestDelay/1000}s before next batch...`);
           await new Promise(resolve => setTimeout(resolve, this.requestDelay));
         }
         
       } catch (error) {
-        console.error(`❌ Error processing batch ${batchNum}:`, error);
+        console.error(`Error processing batch ${batchNum}:`, error);
         // Continue with other batches, but log the failed chunks
         batch.forEach(chunk => {
-          console.warn(`⚠️ Failed to generate embedding for chunk: ${chunk.id}`);
+          console.warn(`Failed to generate embedding for chunk: ${chunk.id}`);
         });
       }
     }
 
     const processingTime = Date.now() - startTime;
     
-    console.log(`✅ Generated ${embeddings.length} embeddings in ${processingTime}ms`);
-    console.log(`📊 Total tokens used: ${totalTokens}`);
-    console.log(`⚡ Processing speed: ${Math.round(embeddings.length / (processingTime/1000))} chunks/second`);
+    console.log(`Generated ${embeddings.length} embeddings in ${processingTime}ms`);
+    console.log(`Total tokens used: ${totalTokens}`);
+    console.log(`Processing speed: ${Math.round(embeddings.length / (processingTime/1000))} chunks/second`);
 
     return {
       chunks: prioritizedChunks,
@@ -223,7 +223,7 @@ export class VectorEmbeddingService {
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        console.log(`🔢 Generating embedding for chunk: ${chunk.id} (attempt ${attempt}/${this.maxRetries})`);
+        console.log(`Generating embedding for chunk: ${chunk.id} (attempt ${attempt}/${this.maxRetries})`);
         
         const response = await fetch(`${this.baseURL}/embeddings`, {
           method: 'POST',
@@ -240,7 +240,7 @@ export class VectorEmbeddingService {
         if (response.status === 429) {
           const errorText = await response.text();
           const waitTime = Math.min(this.requestDelay * Math.pow(2, attempt - 1), 120000); // Max 2 minutes
-          console.log(`⏱️ Rate limited (429), waiting ${waitTime/1000}s before retry ${attempt}/${this.maxRetries}...`);
+          console.log(`Rate limited (429), waiting ${waitTime/1000}s before retry ${attempt}/${this.maxRetries}...`);
           
           if (attempt === this.maxRetries) {
             throw new Error(`Rate limit exceeded after ${this.maxRetries} attempts. Consider adding payment method to Voyage AI for higher limits.`);
@@ -290,7 +290,7 @@ export class VectorEmbeddingService {
           throw new Error('Invalid embedding: contains non-numeric values');
         }
 
-        console.log('✅ Successfully generated embedding:', embedding.length, 'dimensions');
+        console.log('Successfully generated embedding:', embedding.length, 'dimensions');
         
         return {
           chunkId: chunk.id,
@@ -304,12 +304,12 @@ export class VectorEmbeddingService {
       } catch (error) {
         if (attempt === this.maxRetries) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`❌ Error generating embedding for chunk ${chunk.id} after ${this.maxRetries} attempts:`, errorMessage);
+          console.error(`Error generating embedding for chunk ${chunk.id} after ${this.maxRetries} attempts:`, errorMessage);
           throw error;
         }
         
         // If it's not a 429 error, wait a bit and retry
-        console.log(`⚠️ Attempt ${attempt} failed, retrying in 5s...`);
+        console.log(`Attempt ${attempt} failed, retrying in 5s...`);
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
@@ -326,7 +326,7 @@ export class VectorEmbeddingService {
 
     for (let attempt = 1; attempt <= this.maxBatchRetries; attempt++) {
       try {
-        console.log(`🔢 Processing batch of ${chunks.length} chunks with Voyage AI (attempt ${attempt}/${this.maxBatchRetries})`);
+        console.log(`Processing batch of ${chunks.length} chunks with Voyage AI (attempt ${attempt}/${this.maxBatchRetries})`);
         
         const response = await fetch(`${this.baseURL}/embeddings`, {
           method: 'POST',
@@ -346,8 +346,8 @@ export class VectorEmbeddingService {
           const jitter = Math.random() * 5000; // 0-5 second jitter
           const waitTime = Math.min(baseWaitTime * Math.pow(2, attempt - 1) + jitter, 300000); // Max 5 minutes
           
-          console.log(`⏱️ Rate limited (429), waiting ${Math.ceil(waitTime/1000)}s before retry ${attempt}/${this.maxBatchRetries}...`);
-          console.log(`📊 Rate limit details: ${errorText}`);
+          console.log(`Rate limited (429), waiting ${Math.ceil(waitTime/1000)}s before retry ${attempt}/${this.maxBatchRetries}...`);
+          console.log(`Rate limit details: ${errorText}`);
           
           if (attempt === this.maxBatchRetries) {
             throw new Error(`Rate limit exceeded after ${this.maxBatchRetries} attempts. API response: ${errorText}`);
@@ -359,12 +359,12 @@ export class VectorEmbeddingService {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`❌ API error ${response.status}: ${errorText}`);
+          console.error(`API error ${response.status}: ${errorText}`);
           
           // For non-rate-limit errors, retry with shorter delay
           if (attempt < this.maxBatchRetries) {
             const retryWait = Math.min(5000 * attempt, 30000); // 5s, 10s, 15s, etc., max 30s
-            console.log(`⏱️ Retrying in ${retryWait/1000}s due to API error...`);
+            console.log(`Retrying in ${retryWait/1000}s due to API error...`);
             await new Promise(resolve => setTimeout(resolve, retryWait));
             continue;
           }
@@ -380,7 +380,7 @@ export class VectorEmbeddingService {
         }
 
         if (data.data.length !== chunks.length) {
-          console.warn(`⚠️ Response data length (${data.data.length}) doesn't match chunks length (${chunks.length})`);
+          console.warn(`Response data length (${data.data.length}) doesn't match chunks length (${chunks.length})`);
         }
 
         const embeddings: EmbeddingResult[] = [];
@@ -391,14 +391,14 @@ export class VectorEmbeddingService {
           const chunk = chunks[i];
 
           if (!item || !item.embedding) {
-            console.error(`❌ Invalid response item at index ${i}:`, item);
+            console.error(`Invalid response item at index ${i}:`, item);
             continue;
           }
 
           // Validate embedding
           if (!Array.isArray(item.embedding) || item.embedding.length === 0) {
-            console.error(`❌ Invalid embedding at index ${i}: not an array or empty`);
-            continue;
+            console.error(`Invalid embedding at index ${i}: not an array or empty`);
+            continue; 
           }
 
           const avgPromptTokens = Math.floor((data.usage?.prompt_tokens || 0) / chunks.length);
@@ -417,7 +417,7 @@ export class VectorEmbeddingService {
           totalTokens += avgTotalTokens;
         }
 
-        console.log(`✅ Batch processed successfully: ${embeddings.length}/${chunks.length} embeddings generated`);
+        console.log(`Batch processed successfully: ${embeddings.length}/${chunks.length} embeddings generated`);
 
         return {
           embeddings,
@@ -426,11 +426,11 @@ export class VectorEmbeddingService {
       } catch (error) {
         if (attempt === this.maxBatchRetries) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`❌ Batch processing failed after ${this.maxBatchRetries} attempts:`, errorMessage);
+          console.error(`Batch processing failed after ${this.maxBatchRetries} attempts:`, errorMessage);
           throw error;
         }
         
-        console.log(`⚠️ Attempt ${attempt} failed, retrying...`);
+        console.log(`Attempt ${attempt} failed, retrying...`);
       }
     }
     
@@ -595,13 +595,13 @@ export class VectorEmbeddingService {
     
     // If no results with threshold, try with a lower threshold
     if (results.length === 0 && threshold > 0.3) {
-      console.log(`🔄 No results with threshold ${threshold}, trying lower threshold 0.3`);
+      console.log(`No results with threshold ${threshold}, trying lower threshold 0.3`);
       results = sortedSimilarities.filter(item => item.similarity >= 0.3);
     }
     
     // If still no results, return top-k regardless of threshold (as long as similarity > 0)
     if (results.length === 0) {
-      console.log(`🎯 No results with any threshold, returning top ${topK} results regardless of score`);
+      console.log(`No results with any threshold, returning top ${topK} results regardless of score`);
       results = sortedSimilarities.filter(item => item.similarity > 0).slice(0, topK);
     }
     
@@ -652,11 +652,11 @@ export class VectorEmbeddingService {
         throw new Error(`Invalid query embedding: not an array or empty array`);
       }
 
-      console.log(`✅ Query embedding generated successfully, dimension: ${embedding.length}`);
+      console.log(`Query embedding generated successfully, dimension: ${embedding.length}`);
       return embedding;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ Error generating query embedding:', errorMessage);
+      console.error('Error generating query embedding:', errorMessage);
       console.error('Query length:', query.length);
       throw error;
     }
