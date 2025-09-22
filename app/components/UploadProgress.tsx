@@ -11,7 +11,7 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
   const { total, completed, currentFile, isUploading } = progress;
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  console.log('📊 Upload progress update:', {
+  console.log('Upload progress update:', {
     total,
     completed,
     percentage,
@@ -20,7 +20,7 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
   });
 
   if (!isUploading && completed === 0) {
-    console.log('⏭️ Upload progress hidden - not uploading and no files completed');
+    console.log('Upload progress hidden - not uploading and no files completed');
     return null;
   }
 
@@ -106,21 +106,21 @@ export default function UploadProgressComponent({ progress }: UploadProgressProp
       {isUploading && (
         <div className="grid grid-cols-3 gap-2 text-xs">
           <div className={`text-center p-2 rounded ${completed > 0 ? 'bg-green-800 text-green-300' : 'bg-gray-700 text-gray-400'}`}>
-            <div className="font-medium mb-1">📂 Reading Files</div>
+            <div className="font-medium mb-1">Reading Files</div>
             <div className={completed > 0 ? 'text-green-400' : 'text-gray-500'}>
               {completed > 0 ? '✓' : '●'}
             </div>
           </div>
           
           <div className={`text-center p-2 rounded ${percentage > 50 ? 'bg-yellow-800 text-yellow-300' : 'bg-gray-700 text-gray-400'}`}>
-            <div className="font-medium mb-1">🔍 Processing</div>
+            <div className="font-medium mb-1">Processing</div>
             <div className={percentage > 50 ? 'text-yellow-400' : 'text-gray-500'}>
               {percentage > 50 ? '⚡' : '●'}
             </div>
           </div>
           
           <div className={`text-center p-2 rounded ${percentage === 100 ? 'bg-green-800 text-green-300' : 'bg-gray-700 text-gray-400'}`}>
-            <div className="font-medium mb-1">✨ Indexing</div>
+            <div className="font-medium mb-1">Indexing</div>
             <div className={percentage === 100 ? 'text-green-400' : 'text-gray-500'}>
               {percentage === 100 ? '✓' : '●'}
             </div>

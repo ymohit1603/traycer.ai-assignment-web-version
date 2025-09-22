@@ -59,7 +59,7 @@ export class SimilaritySearchService {
   }): Promise<void> {
     // Skip progress updates on server-side (when there's no window object)
     if (typeof window === 'undefined') {
-      console.log(`📊 Indexing progress: ${update.progress}% - ${update.message}`);
+      console.log(`Indexing progress: ${update.progress}% - ${update.message}`);
       return;
     }
     
@@ -104,9 +104,9 @@ export class SimilaritySearchService {
    * Initialize the search service (setup Pinecone index)
    */
   async initialize(): Promise<void> {
-    console.log('🚀 Initializing Similarity Search Service...');
+    console.log('Initializing Similarity Search Service...');
     await this.pineconeService.initializeIndex();
-    console.log('✅ Similarity Search Service ready');
+    console.log('Similarity Search Service ready');
   }
 
   /**
@@ -126,7 +126,7 @@ export class SimilaritySearchService {
     const errors: string[] = [];
     let totalChunks = 0;
 
-    console.log(`🔍 Starting codebase indexing for codebase: ${codebaseId}`);
+    console.log(`Starting codebase indexing for codebase: ${codebaseId}`);
     console.log(`📁 Processing ${codebaseFiles.length} files...`);
 
     // Initialize progress tracking
@@ -153,7 +153,7 @@ export class SimilaritySearchService {
 
     for (const file of codebaseFiles) {
       if (!file.content || file.content.trim().length === 0) {
-        console.log(`⏭️ Skipping empty file: ${file.filePath}`);
+        console.log(`Skipping empty file: ${file.filePath}`);
         processedFiles++;
         continue;
       }
@@ -167,7 +167,7 @@ export class SimilaritySearchService {
           errors
         });
 
-        console.log(`🔄 Chunking file: ${file.filePath}`);
+        console.log(`Chunking file: ${file.filePath}`);
         
         const chunks = await this.chunker.chunkCode(
           file.filePath, 
@@ -180,17 +180,17 @@ export class SimilaritySearchService {
         allChunks.push(...optimizedChunks);
         totalChunks += optimizedChunks.length;
 
-        console.log(`✅ Generated ${optimizedChunks.length} chunks for ${file.fileName}`);
+        console.log(`Generated ${optimizedChunks.length} chunks for ${file.fileName}`);
       } catch (error) {
         const errorMsg = `Error chunking ${file.fileName}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        console.error('❌', errorMsg);
+        console.error('Error', errorMsg);
         errors.push(errorMsg);
       }
 
       processedFiles++;
     }
 
-    console.log(`📊 Phase 1 complete: Generated ${allChunks.length} total chunks`);
+    console.log(`Phase 1 complete: Generated ${allChunks.length} total chunks`);
 
     // Update progress after chunking
     await this.updateProgress(codebaseId, {
@@ -216,10 +216,10 @@ export class SimilaritySearchService {
     let embeddingBatch: EmbeddingBatch | undefined;
     
     try {
-      console.log('🧠 Generating embeddings for all chunks...');
+      console.log('Generating embeddings for all chunks...');
       // For safety, if we have many chunks, process in smaller batches
       if (allChunks.length > 50) {
-        console.log(`⚠️ Large number of chunks (${allChunks.length}), processing in batches...`);
+        console.log(`Large number of chunks (${allChunks.length}), processing in batches...`);
         const batchSize = 20;
         const batches = [];
         
@@ -233,7 +233,7 @@ export class SimilaritySearchService {
         let totalTokens = 0;
         
         for (let i = 0; i < batches.length; i++) {
-          console.log(`📊 Processing batch ${i+1}/${batches.length} (${batches[i].length} chunks)`);
+          console.log(`Processing batch ${i+1}/${batches.length} (${batches[i].length} chunks)`);
           try {
             const batchResult = await this.embeddingService.generateEmbeddings(batches[i]);
             allEmbeddings.push(...batchResult.embeddings);
@@ -262,7 +262,7 @@ export class SimilaritySearchService {
               errors
             });
           } catch (error) {
-            console.error(`❌ Error in batch ${i+1}:`, error);
+            console.error(`Error in batch ${i+1}:`, error);
             errors.push(`Batch ${i+1} error: ${error instanceof Error ? error.message : 'Unknown error'}`);
             // Continue with next batch instead of failing completely
           }
@@ -279,7 +279,7 @@ export class SimilaritySearchService {
         embeddingBatch = await this.embeddingService.generateEmbeddings(allChunks);
       }
       
-      console.log(`✅ Generated ${embeddingBatch.embeddings.length} embeddings`);
+      console.log(`Generated ${embeddingBatch.embeddings.length} embeddings`);
       console.log(`📊 Token usage: ${embeddingBatch.totalTokens} tokens`);
       
       // Check if we have at least some embeddings
@@ -289,17 +289,17 @@ export class SimilaritySearchService {
       
       // Log success rate
       const successRate = (embeddingBatch.embeddings.length / allChunks.length) * 100;
-      console.log(`📊 Embedding generation success rate: ${successRate.toFixed(1)}% (${embeddingBatch.embeddings.length}/${allChunks.length})`);
+        console.log(`Embedding generation success rate: ${successRate.toFixed(1)}% (${embeddingBatch.embeddings.length}/${allChunks.length})`);
       
       // If success rate is too low, warn but continue
       if (successRate < 50) {
-        console.warn(`⚠️ Low embedding success rate: ${successRate.toFixed(1)}%. Indexing may be incomplete.`);
+        console.warn(`Low embedding success rate: ${successRate.toFixed(1)}%. Indexing may be incomplete.`);
         errors.push(`Low embedding success rate: ${successRate.toFixed(1)}%`);
       }
       
     } catch (error) {
       const errorMsg = `Error generating embeddings: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      console.error('❌', errorMsg);
+      console.error('Error', errorMsg);
       errors.push(errorMsg);
       
       // Update progress with error
@@ -315,7 +315,7 @@ export class SimilaritySearchService {
       
       // Don't completely fail if we have partial results
       if (embeddingBatch && embeddingBatch.embeddings && embeddingBatch.embeddings.length > 0) {
-        console.log(`🔄 Continuing with partial embeddings: ${embeddingBatch.embeddings.length} out of ${allChunks.length}`);
+        console.log(`Continuing with partial embeddings: ${embeddingBatch.embeddings.length} out of ${allChunks.length}`);
       } else {
         throw new Error(errorMsg);
       }

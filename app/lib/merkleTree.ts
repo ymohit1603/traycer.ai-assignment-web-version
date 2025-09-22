@@ -42,7 +42,7 @@ export class MerkleTreeService {
     commit?: string,
     branch?: string
   ): MerkleTree {
-    console.log(`🌳 Creating merkle tree for ${files.length} files...`);
+    console.log(`Creating merkle tree for ${files.length} files...`);
     
     const nodes = new Map<string, TreeNode>();
     const fileHashes = new Map<string, string>();
@@ -71,7 +71,7 @@ export class MerkleTreeService {
     // Calculate merkle root hash
     const rootHash = this.calculateMerkleRoot(root);
     
-    console.log(`✅ Merkle tree created with root hash: ${rootHash.substring(0, 16)}...`);
+    console.log(`Merkle tree created with root hash: ${rootHash.substring(0, 16)}...`);
     
     return {
       rootHash,
@@ -87,7 +87,7 @@ export class MerkleTreeService {
    * Compare two merkle trees to detect changes
    */
   static detectChanges(oldTree: MerkleTree, newTree: MerkleTree): ChangeDetectionResult {
-    console.log('🔍 Detecting changes between merkle trees...');
+    console.log('Detecting changes between merkle trees...');
     
     const added: string[] = [];
     const modified: string[] = [];
@@ -116,7 +116,7 @@ export class MerkleTreeService {
 
     const totalChanges = added.length + modified.length + deleted.length;
     
-    console.log(`📊 Change detection complete:`, {
+    console.log(`Change detection complete:`, {
       added: added.length,
       modified: modified.length,
       deleted: deleted.length,

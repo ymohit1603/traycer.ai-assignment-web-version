@@ -9,12 +9,12 @@ export async function GET(request: NextRequest) {
 
     // Handle OAuth errors
     if (error) {
-      console.error('❌ GitHub OAuth error:', error);
+      console.error(' GitHub OAuth error:', error);
       return NextResponse.redirect(new URL(`/?error=${error}`, request.url));
     }
 
     if (!code) {
-      console.error('❌ No authorization code received');
+      console.error(' No authorization code received');
       return NextResponse.redirect(new URL('/?error=no_code', request.url));
     }
 
