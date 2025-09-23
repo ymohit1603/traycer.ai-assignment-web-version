@@ -25,6 +25,6 @@ It acts as an intelligent layer between your **codebase** and **AI agents**, ena
 4. **RAG Layer** → Retrieve relevant code snippets & context.  
 5. **Planning** → Formulate structured calls → then delegate to AI agents.  
 
-✨ This ensures **reduced token usage, better grounding, and more reliable agent interactions**.  
+ This ensures **reduced token usage, better grounding, and more reliable agent interactions**.  
 
 ---
