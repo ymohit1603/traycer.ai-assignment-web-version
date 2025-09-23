@@ -1,4 +1,4 @@
-# 🦖 trycer
+#  trycer
 
 **trycer** is a **developer-first framework** for **semantic code understanding, planning, and incremental synchronization**.  
 
