@@ -1,13 +1,4 @@
 
-
-ChatGPT
-You said:
-Provide me readme for my project named trycer
-It indexes codebase creates merkle tree incremental sync creates embedding rag sementic searching tool calls like in cursor
-So it is basically an additional layer of planning before making requests to ai agents
-ChatGPT said:
-Here’s a solid README.md draft for trycer that you can adapt and expand:
-
 trycer
 trycer is a developer-first framework for semantic code understanding, planning, and incremental synchronization.
 It acts as an intelligent layer between your codebase and AI agents, enabling structured reasoning, embedding-powered search, and efficient request orchestration.
