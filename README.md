@@ -1,30 +1,30 @@
+# 🦖 trycer
 
-trycer
-trycer is a developer-first framework for semantic code understanding, planning, and incremental synchronization.
-It acts as an intelligent layer between your codebase and AI agents, enabling structured reasoning, embedding-powered search, and efficient request orchestration.
+**trycer** is a **developer-first framework** for **semantic code understanding, planning, and incremental synchronization**.  
 
- Features
-Codebase Indexing – Efficiently scans and structures your repository.
+It acts as an intelligent layer between your **codebase** and **AI agents**, enabling **structured reasoning**, **embedding-powered search**, and **efficient request orchestration**.
 
-Merkle Tree Synchronization – Tracks changes incrementally for fast, lightweight updates.
+---
 
-Embedding + RAG – Generates semantic embeddings for deep contextual retrieval.
+## Features
 
-Semantic Search – Find functions, classes, or concepts across your project with natural language queries.
+- **Codebase Indexing** – Efficiently scans and structures your repository.  
+- **Merkle Tree Synchronization** – Tracks changes incrementally for fast, lightweight updates.  
+- **Embedding + RAG** – Generates semantic embeddings for deep contextual retrieval.  
+- **Semantic Search** – Find functions, classes, or concepts across your project with natural language queries.  
+- **Planning Layer for AI Agents** – Provides context and a **"plan-first" approach** before executing tool calls, similar to IDE-integrated assistants (e.g., Cursor).  
+- **Extensible** – Designed as a pluggable layer to integrate with various LLM-powered agents or custom pipelines.  
 
-Planning Layer for AI Agents – Provides context and a "plan-first" approach before executing tool calls, similar to IDE-integrated assistants (e.g., Cursor).
+---
 
-Extensible – Designed as a pluggable layer to integrate with various LLM-powered agents or custom pipelines.
+## How It Works
 
- How It Works
-Indexing: Parse your codebase → extract structure → build embeddings.
+1. **Indexing** → Parse your codebase → extract structure → build embeddings.  
+2. **Merkle Tree Sync** → Track incremental changes → only update what’s new.  
+3. **Embedding Store** → Maintain a vector database for semantic retrieval.  
+4. **RAG Layer** → Retrieve relevant code snippets & context.  
+5. **Planning** → Formulate structured calls → then delegate to AI agents.  
 
-Merkle Tree Sync: Track incremental changes → only update what’s new.
+✨ This ensures **reduced token usage, better grounding, and more reliable agent interactions**.  
 
-Embedding Store: Maintain a vector database for semantic retrieval.
-
-RAG Layer: Retrieve relevant code snippets & context.
-
-Planning: Formulate structured calls → then delegate to AI agents.
-
-This ensures reduced token usage, better grounding, and more reliable agent interactions
+---
